@@ -1,0 +1,582 @@
+{
+  "total_trades": 1376,
+  "winning_trades": "667",
+  "losing_trades": "709",
+  "breakeven_trades": "0",
+  "gross_pnl": 22912.5,
+  "net_pnl": -12385.0,
+  "total_commission": 10085.0,
+  "total_slippage": 25212.5,
+  "win_rate": 0.48473837209302323,
+  "avg_win": 905.5697151424288,
+  "avg_loss": -869.3935119887165,
+  "largest_win": 10415.0,
+  "largest_loss": -8755.0,
+  "max_drawdown": 145177.5,
+  "max_drawdown_pct": 1.8708440721649484,
+  "profit_factor": 0.9799075275794938,
+  "sharpe_ratio": -0.1164985017151652,
+  "sortino_ratio": -0.12407498491707507,
+  "calmar_ratio": -0.09683765493033458,
+  "avg_bars_held": 12.0,
+  "avg_minutes_held": 60.0,
+  "primary_auc": 0.5084108129160326,
+  "meta_auc": 0.0,
+  "precision_improvement": 0.0,
+  "trades_filtered_pct": 0.9421605716687684,
+  "qc_passed": "True",
+  "qc_warnings": [
+    "OVERFIT WARNING: Train AUC (0.8218) much higher than Test AUC (0.5084). Gap: 0.3134"
+  ],
+  "fold_results": [
+    {
+      "fold": 1,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8157417352621005,
+      "test_auc": 0.622189349112426,
+      "trades": 6,
+      "pnl": -3510.0
+    },
+    {
+      "fold": 2,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8145737584710244,
+      "test_auc": 0.4154666027963234,
+      "trades": 2,
+      "pnl": -410.0
+    },
+    {
+      "fold": 3,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8288311027319577,
+      "test_auc": 0.5570602676803674,
+      "trades": 9,
+      "pnl": 1070.0
+    },
+    {
+      "fold": 4,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8205918573891167,
+      "test_auc": 0.5162000227169469,
+      "trades": 12,
+      "pnl": 2465.0
+    },
+    {
+      "fold": 5,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8162618111745686,
+      "test_auc": 0.4649415113332639,
+      "trades": 4,
+      "pnl": 3470.0
+    },
+    {
+      "fold": 6,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8307229090943575,
+      "test_auc": 0.43507716049382716,
+      "trades": 4,
+      "pnl": -317.5
+    },
+    {
+      "fold": 7,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8318694981725873,
+      "test_auc": 0.4982093954076259,
+      "trades": 9,
+      "pnl": 5795.0
+    },
+    {
+      "fold": 8,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8379698800458995,
+      "test_auc": 0.5625400042671218,
+      "trades": 13,
+      "pnl": 7300.0
+    },
+    {
+      "fold": 9,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8411894744203247,
+      "test_auc": 0.4257878053328361,
+      "trades": 16,
+      "pnl": 11712.5
+    },
+    {
+      "fold": 10,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.839013016147591,
+      "test_auc": 0.4752001995067749,
+      "trades": 37,
+      "pnl": -487.5
+    },
+    {
+      "fold": 11,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8211859747981762,
+      "test_auc": 0.45027445460942994,
+      "trades": 47,
+      "pnl": -6332.5
+    },
+    {
+      "fold": 12,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8244687731240485,
+      "test_auc": 0.46055915463041636,
+      "trades": 17,
+      "pnl": 6795.0
+    },
+    {
+      "fold": 13,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8212302029365037,
+      "test_auc": 0.5509506361616803,
+      "trades": 53,
+      "pnl": 15245.0
+    },
+    {
+      "fold": 14,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8141903239055945,
+      "test_auc": 0.4993935398813447,
+      "trades": 17,
+      "pnl": -9362.5
+    },
+    {
+      "fold": 15,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8129744841271679,
+      "test_auc": 0.4920664451827243,
+      "trades": 22,
+      "pnl": -11355.0
+    },
+    {
+      "fold": 16,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8133311041603275,
+      "test_auc": 0.5985694444444444,
+      "trades": 18,
+      "pnl": 10197.5
+    },
+    {
+      "fold": 17,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8048788967931607,
+      "test_auc": 0.5723566308243727,
+      "trades": 23,
+      "pnl": -10187.5
+    },
+    {
+      "fold": 18,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8013662103479718,
+      "test_auc": 0.5053602693602693,
+      "trades": 21,
+      "pnl": 12670.0
+    },
+    {
+      "fold": 19,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.7953311784454453,
+      "test_auc": 0.5405416666666667,
+      "trades": 30,
+      "pnl": 20375.0
+    },
+    {
+      "fold": 20,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8113482619555182,
+      "test_auc": 0.6412612146307799,
+      "trades": 63,
+      "pnl": 17317.5
+    },
+    {
+      "fold": 21,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8037416548430567,
+      "test_auc": 0.37033333333333335,
+      "trades": 18,
+      "pnl": -9147.5
+    },
+    {
+      "fold": 22,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8123797562923462,
+      "test_auc": 0.6102959010429299,
+      "trades": 46,
+      "pnl": 10255.0
+    },
+    {
+      "fold": 23,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8208897841152072,
+      "test_auc": 0.4911607415001801,
+      "trades": 8,
+      "pnl": 805.0
+    },
+    {
+      "fold": 24,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8161564127130314,
+      "test_auc": 0.5731343707405725,
+      "trades": 34,
+      "pnl": 2267.5
+    },
+    {
+      "fold": 25,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8069561698900862,
+      "test_auc": 0.5108773853163863,
+      "trades": 35,
+      "pnl": -12002.5
+    },
+    {
+      "fold": 26,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8133353549513758,
+      "test_auc": 0.5428020996202815,
+      "trades": 18,
+      "pnl": 12972.5
+    },
+    {
+      "fold": 27,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.7997615264693486,
+      "test_auc": 0.5477242664742664,
+      "trades": 86,
+      "pnl": -14087.5
+    },
+    {
+      "fold": 28,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8013838544579175,
+      "test_auc": 0.5299422799422799,
+      "trades": 47,
+      "pnl": -33672.5
+    },
+    {
+      "fold": 29,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8145453673583594,
+      "test_auc": 0.5814619357736357,
+      "trades": 47,
+      "pnl": -27007.5
+    },
+    {
+      "fold": 30,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8116316229378651,
+      "test_auc": 0.5035045742434905,
+      "trades": 23,
+      "pnl": 12042.5
+    },
+    {
+      "fold": 31,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.81538384229719,
+      "test_auc": 0.555835113074515,
+      "trades": 0,
+      "pnl": 0
+    },
+    {
+      "fold": 32,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8176298021221486,
+      "test_auc": 0.4528580410595664,
+      "trades": 1,
+      "pnl": 215.0
+    },
+    {
+      "fold": 33,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8126906311274049,
+      "test_auc": 0.5498166344727191,
+      "trades": 18,
+      "pnl": -137.5
+    },
+    {
+      "fold": 34,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8269176925945734,
+      "test_auc": 0.5129243226409218,
+      "trades": 7,
+      "pnl": -3727.5
+    },
+    {
+      "fold": 35,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8224251617157707,
+      "test_auc": 0.41542005348301514,
+      "trades": 2,
+      "pnl": 105.0
+    },
+    {
+      "fold": 36,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8334676833039505,
+      "test_auc": 0.5470316833795604,
+      "trades": 10,
+      "pnl": 7885.0
+    },
+    {
+      "fold": 37,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8304583848495737,
+      "test_auc": 0.5605083514887437,
+      "trades": 21,
+      "pnl": 975.0
+    },
+    {
+      "fold": 38,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.830308777635219,
+      "test_auc": 0.5526039363113666,
+      "trades": 0,
+      "pnl": 0
+    },
+    {
+      "fold": 39,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.829735345562956,
+      "test_auc": 0.555455888560574,
+      "trades": 11,
+      "pnl": 6085.0
+    },
+    {
+      "fold": 40,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8294152791246852,
+      "test_auc": 0.4800374829622899,
+      "trades": 15,
+      "pnl": 2842.5
+    },
+    {
+      "fold": 41,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8258594779058074,
+      "test_auc": 0.5451206373045154,
+      "trades": 15,
+      "pnl": -7680.0
+    },
+    {
+      "fold": 42,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8376196556892977,
+      "test_auc": 0.45427881297446515,
+      "trades": 29,
+      "pnl": -2330.0
+    },
+    {
+      "fold": 43,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.833239190542255,
+      "test_auc": 0.4273266645647626,
+      "trades": 150,
+      "pnl": -48562.5
+    },
+    {
+      "fold": 44,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8284764118218877,
+      "test_auc": 0.4212993793452492,
+      "trades": 14,
+      "pnl": -3252.5
+    },
+    {
+      "fold": 45,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8339960401338542,
+      "test_auc": 0.5211593593014388,
+      "trades": 18,
+      "pnl": 5027.5
+    },
+    {
+      "fold": 46,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8353086510907825,
+      "test_auc": 0.4889516957862282,
+      "trades": 17,
+      "pnl": -9272.5
+    },
+    {
+      "fold": 47,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8308646056504156,
+      "test_auc": 0.538125213184905,
+      "trades": 18,
+      "pnl": -9525.0
+    },
+    {
+      "fold": 48,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8304276626189617,
+      "test_auc": 0.4204629629629629,
+      "trades": 26,
+      "pnl": -2975.0
+    },
+    {
+      "fold": 49,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.831012191987752,
+      "test_auc": 0.5386943896559281,
+      "trades": 26,
+      "pnl": 6525.0
+    },
+    {
+      "fold": 50,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.831768859490712,
+      "test_auc": 0.557415911259542,
+      "trades": 12,
+      "pnl": 745.0
+    },
+    {
+      "fold": 51,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8209375491184954,
+      "test_auc": 0.4721344227099237,
+      "trades": 3,
+      "pnl": 1667.5
+    },
+    {
+      "fold": 52,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8064983872103129,
+      "test_auc": 0.5046991219355011,
+      "trades": 5,
+      "pnl": 1590.0
+    },
+    {
+      "fold": 53,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8155649793727584,
+      "test_auc": 0.4545175340629885,
+      "trades": 11,
+      "pnl": 6527.5
+    },
+    {
+      "fold": 54,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8260168522110896,
+      "test_auc": 0.4302916666666667,
+      "trades": 12,
+      "pnl": -1895.0
+    },
+    {
+      "fold": 55,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8234118307401236,
+      "test_auc": 0.5067802731809824,
+      "trades": 6,
+      "pnl": -3695.0
+    },
+    {
+      "fold": 56,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8248041570044078,
+      "test_auc": 0.5417150887813842,
+      "trades": 29,
+      "pnl": 32162.5
+    },
+    {
+      "fold": 57,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8380075290865935,
+      "test_auc": 0.5807490458015268,
+      "trades": 19,
+      "pnl": -5320.0
+    },
+    {
+      "fold": 58,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8257408047920792,
+      "test_auc": 0.44551724137931037,
+      "trades": 20,
+      "pnl": -5365.0
+    },
+    {
+      "fold": 59,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8267288433886986,
+      "test_auc": 0.48649363669275114,
+      "trades": 26,
+      "pnl": -7627.5
+    },
+    {
+      "fold": 60,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8283491595578854,
+      "test_auc": 0.49471714725952015,
+      "trades": 36,
+      "pnl": 11912.5
+    },
+    {
+      "fold": 61,
+      "train_samples": 13998,
+      "test_samples": 390,
+      "train_auc": 0.8273295757212918,
+      "test_auc": 0.45487521260717134,
+      "trades": 14,
+      "pnl": -160.0
+    }
+  ]
+}
