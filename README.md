@@ -5,10 +5,26 @@ A comprehensive algorithmic trading system leveraging machine learning, macroeco
 ## Project Status: Phase 7 - ML Model Development (IN PROGRESS)
 
 **Current Results:**
-- **XGBoost Model**: 84.07% AUC-ROC, 75.23% Accuracy, 67.22% F1 Score
-- **RandomForest Model**: 76.83% AUC-ROC, 71.07% Accuracy, 63.13% F1 Score
-- **Training Data**: 684,410 bars of ES 1-minute data (2023-2024)
-- **Selected Features**: 75 top-performing features from 100+ candidates
+| Model | AUC-ROC | Accuracy | F1 Score | Notes |
+|-------|---------|----------|----------|-------|
+| **LightGBM** | **84.21%** | 74.40% | 73.36% | Best overall |
+| XGBoost | 84.07% | 75.23% | 67.22% | Strong baseline |
+| RandomForest | 76.83% | 71.07% | 63.13% | Baseline |
+| GRU | 65.60% | 62.03% | 62.63% | Deep learning |
+| LSTM | 65.28% | 62.00% | 60.99% | Deep learning |
+
+**Training Configuration:**
+- **Data**: 684,410 bars of ES 1-minute data (2023-2024)
+- **Timeframe**: 5-minute RTH bars (optimal from grid search)
+- **Walk-Forward**: 180-day train, 5-day test, 42-bar embargo
+- **Features**: 75 top-performing from 474 candidates
+
+**Latest Additions (2025-12-04):**
+- Comprehensive walk-forward backtesting with full metrics
+- Purged K-Fold CV for LSTM/GRU (addresses overfitting)
+- Quality control validation framework
+- RTH-only trading enforcement
+- Data leakage detection
 
 ## Repository Structure
 
@@ -33,13 +49,23 @@ SKIE_Ninja/
 │       │   ├── feature_pipeline.py       # Unified feature builder
 │       │   └── feature_selection.py      # Multi-method feature ranking
 │       ├── models/                # ML model training
-│       │   └── model_trainer.py          # XGBoost, RF, LightGBM training
+│       │   ├── model_trainer.py          # XGBoost, RF, LightGBM training
+│       │   ├── deep_learning_trainer.py  # LSTM/GRU models
+│       │   ├── purged_cv_rnn_trainer.py  # Purged K-Fold CV for RNNs (NEW)
+│       │   └── rnn_hyperparameter_optimizer.py  # Grid search for RNNs
+│       ├── backtesting/           # Walk-forward backtesting (NEW)
+│       │   ├── walk_forward_backtest.py  # Original WF backtest
+│       │   └── comprehensive_backtest.py # Full metrics backtest (NEW)
+│       ├── quality_control/       # Validation framework (NEW)
+│       │   └── validation_framework.py   # Data & model validation
 │       └── utils/                 # Utility functions
+│           └── data_resampler.py        # OHLCV resampling utilities
 ├── data/
 │   ├── raw/
-│   │   └── market/               # Downloaded market data
+│   │   └── market/               # Downloaded market data (ES, NQ, etc.)
 │   ├── processed/                # Feature rankings and selections
-│   └── models/                   # Trained model files
+│   ├── models/                   # Trained model files (.pkl, .pt)
+│   └── backtest_results/         # Backtest outputs (NEW)
 ├── config/
 │   ├── feature_config.yaml       # Feature configuration
 │   ├── api_keys.py              # API key management
@@ -47,7 +73,10 @@ SKIE_Ninja/
 ├── research/
 │   ├── 01_initial_research.md   # Platform research (494 lines)
 │   └── 02_comprehensive_variables_research.md  # Variables (2,692 lines)
-└── docs/                         # Documentation
+└── docs/
+    ├── architecture/             # System architecture docs
+    └── methodology/              # Backtesting methodology (NEW)
+        └── BACKTEST_METHODOLOGY.md
 ```
 
 ## Data Available
@@ -114,11 +143,50 @@ AUC-ROC:   76.83%
 ```
 
 ### Training Configuration
-- Walk-forward validation with 3 folds
-- 80/20 temporal train/test split
+- Walk-forward validation with 61 folds (180-day train, 5-day test)
+- 42-bar embargo period (~3.5 hours) between train/test
 - 300 estimators per model
 - Early stopping for gradient boosting
 - Feature scaling with StandardScaler
+
+## Backtesting Framework
+
+### Comprehensive Walk-Forward Backtest
+
+The backtesting system provides detailed metrics for strategy evaluation:
+
+| Category | Metrics |
+|----------|---------|
+| **P&L** | Gross, Net, Commission, Slippage |
+| **Win/Loss** | Win Rate, Avg Win, Avg Loss, Max Win/Loss |
+| **KPIs** | Profit Factor, Payoff Ratio, Expectancy |
+| **Drawdown** | Max DD ($, %), Duration, Avg DD |
+| **Duration** | Bars Held, Time in Trade (min) |
+| **Risk-Adjusted** | Sharpe, Sortino, Calmar Ratios |
+| **MFE/MAE** | Max Favorable/Adverse Excursion |
+
+### Quality Control Validation
+
+Automatic checks for:
+- Data quality (OHLCV relationships, missing values)
+- Feature quality (no leakage, no infinite values)
+- Backtest realism (costs, RTH compliance)
+- Statistical validity (suspicious metrics detection)
+
+### Usage
+
+```bash
+# Run comprehensive backtest
+python src/python/run_validated_backtest.py
+
+# Or programmatically
+from backtesting import run_comprehensive_backtest
+trades, metrics, report = run_comprehensive_backtest(
+    prices, features,
+    target_col='target_direction_1',
+    model_type='lightgbm'
+)
+```
 
 ## Development Roadmap
 
@@ -168,8 +236,12 @@ AUC-ROC:   76.83%
 
 ### 🔄 Phase 7: ML Model Development - IN PROGRESS
 - [x] XGBoost and RandomForest models
-- [ ] LightGBM model (pending installation)
-- [ ] LSTM/GRU time series models
+- [x] LightGBM model (84.21% AUC - best performer)
+- [x] LSTM/GRU time series models (with Purged CV)
+- [x] Comprehensive walk-forward backtesting
+- [x] Quality control validation framework
+- [x] RTH-only trading enforcement
+- [x] Data leakage detection
 - [ ] Transformer-based models
 - [ ] Model ensembling and stacking
 - [ ] ONNX export for NinjaTrader

@@ -4,9 +4,78 @@
 **Last Updated**: 2025-12-04
 **Status**: Phase 7 - ML Model Development (IN PROGRESS)
 
-## Current Session Progress (2025-12-04)
+## Current Session Progress (2025-12-04) - UPDATED
 
-### Latest Accomplishments
+### Latest Accomplishments (Session 2)
+1. ✅ **Purged K-Fold CV for RNNs** - Addresses overfitting in LSTM/GRU models
+   - Implements de Prado (2018) approach with purge and embargo periods
+   - Prevents data leakage from feature lookbacks and target labels
+   - Uses aggressive regularization (50% dropout, weight decay 1e-4)
+   - File: `src/python/models/purged_cv_rnn_trainer.py`
+
+2. ✅ **Comprehensive Walk-Forward Backtesting** - Full metrics framework
+   - P&L analysis (gross, net, commission, slippage)
+   - Drawdown metrics (max DD, duration, avg DD)
+   - Trade duration (bars held, time in minutes)
+   - MFE/MAE analysis (max favorable/adverse excursion)
+   - Risk-adjusted returns (Sharpe, Sortino, Calmar)
+   - KPIs (profit factor, payoff ratio, expectancy)
+   - File: `src/python/backtesting/comprehensive_backtest.py`
+
+3. ✅ **RTH Enforcement** - All trades during Regular Trading Hours only
+   - 9:30 AM - 4:00 PM Eastern Time
+   - Automatic filtering in backtest framework
+   - Better liquidity, tighter spreads
+
+4. ✅ **Data Leakage Detection** - Automatic checks before training
+   - Detects features with >95% correlation to target
+   - Warns on suspicious feature names (future, target, next_)
+   - Integrated into backtesting pipeline
+
+5. ✅ **Comprehensive Report Generator** - Full backtest reports with:
+   - Trade summary (total, wins, losses, long/short)
+   - P&L breakdown (gross, commission, slippage, net)
+   - Win/loss statistics (avg win/loss, max win/loss)
+   - KPIs (profit factor, payoff ratio, expectancy)
+   - Drawdown analysis (max DD, duration)
+   - Trade duration (bars, minutes, min/max)
+   - Risk-adjusted returns (Sharpe, Sortino, Calmar)
+   - Time analysis (daily P&L, winning/losing days)
+
+6. ✅ **Runner Script** - `run_backtest_analysis.py` for easy execution
+
+### RNN Overfitting Mitigation (Literature-Based)
+Based on de Prado (2018), Fischer & Krauss (2018), and Grinsztajn et al. (2022):
+
+| Technique | Implementation | Rationale |
+|-----------|---------------|-----------|
+| **Purged K-Fold CV** | 200-bar purge between train/test | Prevents feature leakage |
+| **Embargo Period** | 42-bar gap after test set | Prevents target leakage |
+| **High Dropout** | 50% (vs typical 30%) | Reduces overfitting |
+| **Weight Decay** | 1e-4 (vs 1e-5) | Stronger L2 regularization |
+| **Reduced Model Size** | 64 hidden units, 1 layer | Less capacity = less overfitting |
+| **Early Stopping** | 5 epochs patience | Quick termination |
+| **Batch Normalization** | After LSTM/GRU | Stabilizes training |
+| **Layer Normalization** | On input | Normalizes features |
+
+### Backtest Metrics Available
+
+| Category | Metrics |
+|----------|---------|
+| **Trade Counts** | Total, wins, losses, long, short, breakeven |
+| **P&L** | Gross, net, commission, slippage |
+| **Win/Loss** | Win rate, avg win, avg loss, max win, max loss |
+| **KPIs** | Profit factor, payoff ratio, expectancy |
+| **Drawdown** | Max DD ($), max DD (%), duration (days), avg DD |
+| **Excursion** | Avg MFE, avg MAE, MFE/MAE in ticks |
+| **Duration** | Avg/min/max bars held, avg/min/max time (minutes) |
+| **Contracts** | Avg per trade, max per trade, total traded |
+| **Risk-Adjusted** | Sharpe ratio, Sortino ratio, Calmar ratio |
+| **Time** | Trading days, trades/day, daily P&L, best/worst day |
+| **Consecutive** | Max wins streak, max losses streak |
+| **Model** | Accuracy, AUC-ROC, F1 score |
+
+### Previous Accomplishments (Session 1)
 1. ✅ **Rolling Window Grid Optimization Complete** - Tested 15 configurations each for 5-min and 15-min
 2. ✅ **Timeframe Decision: 5-MIN BARS** - Outperforms 15-min by ~1.3% AUC
 3. ✅ **Optimal CV Config: Train=180d, Test=5d** - 83.30% AUC-ROC
