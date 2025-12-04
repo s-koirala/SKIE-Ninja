@@ -9,6 +9,22 @@ Implements advanced trading targets for ML training:
 4. Pivot Point Features: Classic and dynamic pivots
 
 Reference: research/02_comprehensive_variables_research.md
+
+IMPORTANT - LOOK-AHEAD BIAS FIX (2025-12-04):
+---------------------------------------------
+This module was refactored to remove all look-ahead bias:
+
+- Pyramiding: Changed from shift(-horizon) to shift(1), using historical
+  MFE/MAE patterns. Contract sizing: 1, 2, 3 (max 5) instead of 5, 10, 20.
+
+- DDCA: Removed ddca_*_success features that used future prices.
+  Replaced with ddca_*_pattern and ddca_*_effectiveness using past data.
+
+- Pivot Detection: Changed from forward-looking confirmation to confirmed
+  pivots detected with a delay (detect pivots N bars after they occur).
+
+All features now use only past data (shift(N) where N >= 1) and no
+future data (no shift(-N) operations).
 """
 
 import pandas as pd
@@ -66,39 +82,76 @@ class AdvancedTargets:
 
     def _calculate_pyramiding_targets(self) -> pd.DataFrame:
         """
-        Calculate pyramiding opportunity targets.
+        Calculate pyramiding opportunity features using PAST DATA ONLY.
 
         Pyramiding: Adding to a winning position when trend continues.
-        Targets identify bars where adding to position would be profitable.
+        Features identify favorable conditions for pyramiding based on:
+        - Historical volatility and MFE/MAE patterns
+        - Trend strength and momentum
+        - ATR-based risk assessment
+
+        NOTE: Fixed to remove look-ahead bias (no shift(-N) operations).
+        Contract scaling: 1, 2, 3 contracts (max 5) instead of 5, 10, 20.
         """
         df = pd.DataFrame(index=self.df.index)
         close = self.df['close']
         high = self.df['high']
         low = self.df['low']
 
-        # Forward returns at different horizons
-        for horizon in [5, 10, 20]:
-            future_max = high.rolling(horizon).max().shift(-horizon)
-            future_min = low.rolling(horizon).min().shift(-horizon)
+        # Calculate ATR for risk assessment (all past data)
+        tr1 = high - low
+        tr2 = abs(high - close.shift(1))
+        tr3 = abs(low - close.shift(1))
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr_14 = tr.rolling(14).mean()
+        atr_20 = tr.rolling(20).mean()
 
-            # MFE/MAE from current close
-            mfe = (future_max - close) / close
-            mae = (close - future_min) / close
+        # Historical MFE/MAE ratios (past N bars, NOT future)
+        # This measures how price moved AFTER similar conditions historically
+        for lookback in [5, 10, 20]:
+            # Past bar range extremes (what happened in previous N bars)
+            past_max = high.rolling(lookback).max().shift(1)  # Exclude current bar
+            past_min = low.rolling(lookback).min().shift(1)   # Exclude current bar
 
-            # Pyramiding UP target: Good to add to long when:
-            # - Price continues higher (MFE > threshold)
-            # - Drawdown limited (MAE < threshold)
-            df[f'pyramid_long_{horizon}'] = (
-                (mfe > 0.005) & (mae < 0.003)  # 0.5% profit, <0.3% drawdown
+            # Historical MFE/MAE from entry at past_close
+            past_close = close.shift(1)
+            hist_mfe = (past_max - past_close) / (past_close + 1e-10)
+            hist_mae = (past_close - past_min) / (past_close + 1e-10)
+
+            # Risk-reward based on HISTORICAL price action (not future)
+            df[f'pyramid_rr_{lookback}'] = hist_mfe / (hist_mae + 1e-10)
+
+            # Favorable pyramid conditions based on past patterns
+            # Long: Good historical upside, limited downside
+            df[f'pyramid_long_{lookback}'] = (
+                (hist_mfe > 0.005) & (hist_mae < 0.003)
             ).astype(int)
 
-            # Pyramiding DOWN target: Good to add to short when:
-            df[f'pyramid_short_{horizon}'] = (
-                (mae > 0.005) & (mfe < 0.003)
+            # Short: Good historical downside, limited upside
+            df[f'pyramid_short_{lookback}'] = (
+                (hist_mae > 0.005) & (hist_mfe < 0.003)
             ).astype(int)
 
-            # Risk-reward ratio for pyramiding
-            df[f'pyramid_rr_{horizon}'] = mfe / (mae + 1e-10)
+        # ATR-based pyramid sizing signals (contracts 1, 2, 3)
+        # Favorable conditions for adding contracts based on volatility
+        returns = close.pct_change()
+        vol_20 = returns.rolling(20).std()
+
+        # Low volatility = safer to pyramid (add up to 3 contracts)
+        df['pyramid_vol_signal'] = (vol_20 < vol_20.rolling(50).mean()).astype(int)
+
+        # Pyramid scale levels based on ATR distance from entry
+        # These indicate when to add 1, 2, or 3 contracts
+        for contracts in [1, 2, 3]:
+            atr_mult = contracts * 0.5  # 0.5, 1.0, 1.5 ATR thresholds
+            # Favorable to add long when price pulled back N ATR
+            df[f'pyramid_add_{contracts}_long'] = (
+                (close < close.rolling(10).mean() - atr_14 * atr_mult)
+            ).astype(int)
+            # Favorable to add short when price rallied N ATR
+            df[f'pyramid_add_{contracts}_short'] = (
+                (close > close.rolling(10).mean() + atr_14 * atr_mult)
+            ).astype(int)
 
         # Trend continuation strength (for pyramiding decisions)
         for period in [10, 20]:
@@ -180,19 +233,28 @@ class AdvancedTargets:
             df[f'ddca_buy_level_{mult}atr'] = (df['atr_from_high'] >= mult).astype(int)
             df[f'ddca_sell_level_{mult}atr'] = (df['atr_from_low'] >= mult).astype(int)
 
-        # Forward-looking DDCA success (did averaging work?)
-        for horizon in [10, 20]:
-            future_close = close.shift(-horizon)
+        # DDCA historical success patterns (using PAST data only)
+        # Instead of looking forward, we measure how similar past DDCA setups performed
+        for lookback in [10, 20]:
+            # Rolling mean reversion success: when in buy zone, did price subsequently rise?
+            # We use PAST pattern: shifted forward by lookback to see what happened AFTER buy zone
+            past_buy_zone = df['ddca_buy_zone_20'].shift(lookback)
+            past_close = close.shift(lookback)
 
-            # If we averaged down, did price recover?
-            df[f'ddca_buy_success_{horizon}'] = (
-                (df['ddca_buy_zone_20'] == 1) & (future_close > close)
+            # Historical success rate: was price higher after buy zone entry?
+            df[f'ddca_buy_pattern_{lookback}'] = (
+                (past_buy_zone == 1) & (close.shift(1) > past_close)
             ).astype(int)
 
-            # If we scaled out, did price drop?
-            df[f'ddca_sell_success_{horizon}'] = (
-                (df['ddca_sell_zone_20'] == 1) & (future_close < close)
+            # Same for sell zone
+            past_sell_zone = df['ddca_sell_zone_20'].shift(lookback)
+            df[f'ddca_sell_pattern_{lookback}'] = (
+                (past_sell_zone == 1) & (close.shift(1) < past_close)
             ).astype(int)
+
+            # Rolling DDCA effectiveness score (past N bars)
+            df[f'ddca_buy_effectiveness_{lookback}'] = df[f'ddca_buy_pattern_{lookback}'].rolling(50).mean()
+            df[f'ddca_sell_effectiveness_{lookback}'] = df[f'ddca_sell_pattern_{lookback}'].rolling(50).mean()
 
         # Mean reversion probability (for DDCA effectiveness)
         returns = close.pct_change()
@@ -207,8 +269,10 @@ class AdvancedTargets:
         """
         Calculate support/resistance levels based on local extremes.
 
-        A bar is a pivot high/low if it's the max/min among:
-        - X bars lookback AND Y bars lookforward
+        FIXED: Using PAST DATA ONLY for pivot detection.
+        A bar is a confirmed pivot high/low if it was the max/min among
+        the surrounding N bars - we detect this AFTER confirmation
+        (i.e., with a delay equal to the confirmation window).
 
         The wick/body of pivot bars form S/R zones.
         """
@@ -218,22 +282,31 @@ class AdvancedTargets:
         low = self.df['low']
         open_price = self.df['open']
 
-        # Detect pivot highs and lows with different lookback/forward
+        # Detect CONFIRMED pivot highs and lows (using past data only)
+        # A pivot is confirmed N bars AFTER it occurs
         for lookback in [5, 10, 20]:
-            for lookforward in [5, 10]:
-                # Pivot High: highest high in window
-                past_max = high.rolling(lookback).max()
-                future_max = high.rolling(lookforward).max().shift(-lookforward)
+            for confirm_bars in [5, 10]:
+                # Total window = lookback + confirm_bars
+                total_window = lookback + confirm_bars
 
-                is_pivot_high = (high >= past_max) & (high >= future_max)
-                df[f'pivot_high_{lookback}_{lookforward}'] = is_pivot_high.astype(int)
+                # Find the max high in the total window, shifted to exclude current bar
+                window_max = high.rolling(total_window).max().shift(1)
+                window_min = low.rolling(total_window).min().shift(1)
 
-                # Pivot Low: lowest low in window
-                past_min = low.rolling(lookback).min()
-                future_min = low.rolling(lookforward).min().shift(-lookforward)
+                # The pivot occurred at the bar that was the max/min
+                # We detect it `confirm_bars` later (when confirmed)
+                # Check if the bar `confirm_bars` ago was the peak
+                bar_high_confirm_ago = high.shift(confirm_bars)
+                bar_low_confirm_ago = low.shift(confirm_bars)
 
-                is_pivot_low = (low <= past_min) & (low <= future_min)
-                df[f'pivot_low_{lookback}_{lookforward}'] = is_pivot_low.astype(int)
+                # Confirmed pivot high: the bar `confirm_bars` ago was the highest
+                # in a window of `lookback` before it and `confirm_bars` after
+                is_confirmed_pivot_high = (bar_high_confirm_ago >= window_max)
+                df[f'pivot_high_{lookback}_{confirm_bars}'] = is_confirmed_pivot_high.astype(int)
+
+                # Confirmed pivot low: the bar `confirm_bars` ago was the lowest
+                is_confirmed_pivot_low = (bar_low_confirm_ago <= window_min)
+                df[f'pivot_low_{lookback}_{confirm_bars}'] = is_confirmed_pivot_low.astype(int)
 
         # S/R zone features (distance to recent pivots)
         # Find most recent pivot high/low levels

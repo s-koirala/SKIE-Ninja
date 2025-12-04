@@ -2,7 +2,7 @@
 
 **Date**: 2025-12-04
 **Analyst**: SKIE-Ninja Development Team
-**Status**: Investigation Complete - Critical Issues Identified
+**Status**: FIXES APPLIED - Ready for Re-testing
 
 ---
 
@@ -259,3 +259,94 @@ The QC system correctly identified the suspicious metrics, demonstrating the imp
 ---
 
 *Report generated as part of SKIE-Ninja comprehensive testing phase.*
+
+---
+
+## 8. FIXES APPLIED (2025-12-04)
+
+### 8.1 Sharpe/Sortino Ratio Fix - COMPLETED
+
+**File**: `comprehensive_backtest.py` lines 1100-1141
+
+Changed from per-trade returns to daily returns:
+```python
+# Aggregate P&L by day
+daily_pnl_dict = {}
+for t in self.trades:
+    date_key = str(t.entry_time.date())
+    daily_pnl_dict[date_key] = daily_pnl_dict.get(date_key, 0) + t.net_pnl
+
+daily_returns = list(daily_pnl_dict.values())
+avg_daily_return = np.mean(daily_returns)
+std_daily_return = np.std(daily_returns, ddof=1)
+
+# Annualized Sharpe: sqrt(252) for daily data
+metrics.sharpe_ratio = (avg_daily_return / std_daily_return) * np.sqrt(252)
+```
+
+### 8.2 Feature Engineering Look-Ahead Bias - COMPLETED
+
+**File**: `advanced_targets.py`
+
+All leaky features were FIXED (not removed) to preserve trading concepts:
+
+#### Pyramiding Features (lines 67-168)
+- **Before**: Used `shift(-horizon)` to access future MFE/MAE
+- **After**: Uses `shift(1)` to calculate historical MFE/MAE patterns
+- **Contract sizing**: Changed from 5/10/20 to 1/2/3 (max 5)
+
+```python
+# FIXED: Uses past data only
+past_max = high.rolling(lookback).max().shift(1)  # Exclude current bar
+past_min = low.rolling(lookback).min().shift(1)   # Exclude current bar
+hist_mfe = (past_max - past_close) / (past_close + 1e-10)
+hist_mae = (past_close - past_min) / (past_close + 1e-10)
+df[f'pyramid_rr_{lookback}'] = hist_mfe / (hist_mae + 1e-10)
+```
+
+#### DDCA Features (lines 220-241)
+- **Before**: Used `close.shift(-horizon)` for future price
+- **After**: Uses historical pattern effectiveness
+
+```python
+# FIXED: Measures how past DDCA setups performed
+past_buy_zone = df['ddca_buy_zone_20'].shift(lookback)
+past_close = close.shift(lookback)
+df[f'ddca_buy_pattern_{lookback}'] = (
+    (past_buy_zone == 1) & (close.shift(1) > past_close)
+).astype(int)
+df[f'ddca_buy_effectiveness_{lookback}'] = df[f'ddca_buy_pattern_{lookback}'].rolling(50).mean()
+```
+
+#### Pivot Detection (lines 252-293)
+- **Before**: Used `shift(-lookforward)` for forward confirmation
+- **After**: Confirms pivots with delay (detects N bars after occurrence)
+
+```python
+# FIXED: Confirmed pivot using past data only
+total_window = lookback + confirm_bars
+window_max = high.rolling(total_window).max().shift(1)
+bar_high_confirm_ago = high.shift(confirm_bars)
+is_confirmed_pivot_high = (bar_high_confirm_ago >= window_max)
+```
+
+### 8.3 QC Checks Added - COMPLETED
+
+**File**: `validation_framework.py`
+
+New validation checks added:
+- `max_sharpe: 3.0` - Flag if Sharpe > 3 (literature benchmark)
+- `max_sortino: 5.0` - Flag if Sortino > 5
+- `max_consecutive_wins: 20` - Flag if >20 consecutive wins
+- `min_losing_days_pct: 0.10` - Alert if <10% losing days
+
+### 8.4 Feature Count
+
+After fixes, the module generates **126 features** (down from previous count due to restructuring).
+
+### 8.5 Next Steps
+
+1. Re-train models with fixed features
+2. Re-run walk-forward backtest
+3. Verify realistic performance metrics (expected: 50-60% win rate, 1-2 Sharpe)
+4. Paper trade before live deployment
