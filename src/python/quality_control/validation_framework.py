@@ -92,6 +92,10 @@ class ValidationConfig:
     max_win_rate: float = 0.80  # Win rate > 80% is suspicious
     max_profit_factor: float = 5.0  # PF > 5 is suspicious
     min_sharpe: float = 0.0
+    max_sharpe: float = 3.0  # Sharpe > 3 is suspicious (literature benchmark)
+    max_sortino: float = 5.0  # Sortino > 5 is suspicious
+    max_consecutive_wins: int = 20  # >20 consecutive wins is suspicious
+    min_losing_days_pct: float = 0.10  # At least 10% losing days expected
 
     # RTH Parameters
     rth_start: time = time(9, 30)
@@ -494,26 +498,126 @@ class BacktestValidator:
             if not has_slippage:
                 self.warnings.append("No slippage costs applied - unrealistic")
 
+        # Check for "no losing days" anomaly
+        if 'entry_time' in trades_df.columns and 'net_pnl' in trades_df.columns:
+            try:
+                trades_df['date'] = pd.to_datetime(trades_df['entry_time']).dt.date
+                daily_pnl = trades_df.groupby('date')['net_pnl'].sum()
+                n_trading_days = len(daily_pnl)
+                n_losing_days = (daily_pnl < 0).sum()
+                losing_day_pct = n_losing_days / n_trading_days if n_trading_days > 0 else 0
+
+                results['checks']['losing_days'] = {
+                    'trading_days': n_trading_days,
+                    'losing_days': int(n_losing_days),
+                    'losing_day_pct': float(losing_day_pct),
+                    'min_expected': self.config.min_losing_days_pct,
+                    'passed': losing_day_pct >= self.config.min_losing_days_pct or n_trading_days < 50
+                }
+
+                if n_trading_days >= 50 and losing_day_pct < self.config.min_losing_days_pct:
+                    self.issues.append(
+                        f"CRITICAL: Only {n_losing_days} losing days out of {n_trading_days} "
+                        f"({losing_day_pct:.1%}) - suggests look-ahead bias or data leakage"
+                    )
+                    results['passed'] = False
+
+                if n_trading_days >= 50 and n_losing_days == 0:
+                    self.issues.append(
+                        "CRITICAL: ZERO losing days detected - this is statistically impossible "
+                        "for any real trading strategy. Check for look-ahead bias."
+                    )
+                    results['passed'] = False
+
+            except Exception as e:
+                self.warnings.append(f"Could not analyze daily P&L: {e}")
+
+        # Check for excessive consecutive wins
+        if 'net_pnl' in trades_df.columns:
+            is_win = trades_df['net_pnl'] > 0
+            max_consec_wins = 0
+            current_streak = 0
+            for win in is_win:
+                if win:
+                    current_streak += 1
+                    max_consec_wins = max(max_consec_wins, current_streak)
+                else:
+                    current_streak = 0
+
+            results['checks']['consecutive_wins'] = {
+                'max_consecutive': max_consec_wins,
+                'threshold': self.config.max_consecutive_wins,
+                'passed': max_consec_wins <= self.config.max_consecutive_wins
+            }
+
+            if max_consec_wins > self.config.max_consecutive_wins:
+                self.warnings.append(
+                    f"SUSPICIOUS: {max_consec_wins} consecutive wins detected - "
+                    f"exceeds threshold of {self.config.max_consecutive_wins}"
+                )
+
         results['issues'] = self.issues
         results['warnings'] = self.warnings
 
         return results
 
     def validate_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate backtest metrics for realism."""
+        """Validate backtest metrics for realism.
+
+        Based on literature benchmarks:
+        - Sharpe > 3 is suspicious for non-HFT strategies
+        - Sortino > 5 is suspicious
+        - Profit factor > 5 is suspicious
+        - Win rate > 80% is suspicious
+
+        References:
+        - QuantStart: https://www.quantstart.com/articles/Sharpe-Ratio-for-Algorithmic-Trading-Performance-Measurement/
+        - de Prado (2018): Advances in Financial Machine Learning
+        """
         results = {'passed': True, 'checks': {}}
 
         # Check Sharpe ratio
         sharpe = metrics.get('sharpe_ratio', 0)
+        sharpe_passed = self.config.min_sharpe <= sharpe <= self.config.max_sharpe
         results['checks']['sharpe'] = {
             'value': sharpe,
             'min': self.config.min_sharpe,
-            'passed': sharpe >= self.config.min_sharpe
+            'max': self.config.max_sharpe,
+            'passed': sharpe_passed
         }
-        if sharpe > 3.0:
-            self.warnings.append(f"SUSPICIOUS: Sharpe ratio {sharpe:.2f} unusually high")
+        if sharpe > self.config.max_sharpe:
+            self.warnings.append(
+                f"SUSPICIOUS: Sharpe ratio {sharpe:.2f} exceeds realistic threshold of "
+                f"{self.config.max_sharpe}. Per literature, non-HFT strategies rarely exceed 2-3."
+            )
         if sharpe < self.config.min_sharpe:
             self.warnings.append(f"Negative Sharpe ratio: {sharpe:.2f}")
+
+        # Check Sortino ratio
+        sortino = metrics.get('sortino_ratio', 0)
+        if sortino == float('inf'):
+            self.issues.append(
+                "CRITICAL: Infinite Sortino ratio - indicates ZERO losing days. "
+                "This is statistically impossible and suggests look-ahead bias."
+            )
+            results['checks']['sortino'] = {
+                'value': 'inf',
+                'max': self.config.max_sortino,
+                'passed': False
+            }
+            results['passed'] = False
+        else:
+            sortino_passed = sortino <= self.config.max_sortino
+            results['checks']['sortino'] = {
+                'value': sortino,
+                'max': self.config.max_sortino,
+                'passed': sortino_passed
+            }
+            if sortino > self.config.max_sortino:
+                self.warnings.append(
+                    f"SUSPICIOUS: Sortino ratio {sortino:.2f} exceeds realistic threshold of "
+                    f"{self.config.max_sortino}."
+                )
 
         # Check max drawdown
         max_dd_pct = metrics.get('max_drawdown_pct', 0)
@@ -523,6 +627,29 @@ class BacktestValidator:
         }
         if max_dd_pct >= 0.5:
             self.issues.append(f"Extreme drawdown: {max_dd_pct:.2%}")
+
+        # Check profit factor
+        pf = metrics.get('profit_factor', 0)
+        if pf != float('inf'):
+            pf_passed = pf <= self.config.max_profit_factor
+            results['checks']['profit_factor'] = {
+                'value': pf,
+                'max': self.config.max_profit_factor,
+                'passed': pf_passed
+            }
+            if pf > self.config.max_profit_factor:
+                self.warnings.append(
+                    f"SUSPICIOUS: Profit factor {pf:.2f} exceeds realistic threshold of "
+                    f"{self.config.max_profit_factor}."
+                )
+
+        # Check win rate
+        win_rate = metrics.get('win_rate_pct', 0) / 100 if 'win_rate_pct' in metrics else metrics.get('win_rate', 0)
+        if win_rate > self.config.max_win_rate:
+            self.warnings.append(
+                f"SUSPICIOUS: Win rate {win_rate:.1%} exceeds realistic threshold of "
+                f"{self.config.max_win_rate:.1%}."
+            )
 
         results['issues'] = self.issues
         results['warnings'] = self.warnings

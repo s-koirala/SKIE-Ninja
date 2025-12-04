@@ -76,13 +76,35 @@ Sources:
 - `data/backtest_results/backtest_investigation_report.md`
 
 ### Action Items Before Production
-1. [ ] Fix Sharpe/Sortino ratio calculation in comprehensive_backtest.py
-2. [ ] Re-run backtests with corrected metrics
-3. [ ] Investigate feature engineering for potential look-ahead bias
-4. [ ] Add QC check for "no losing days" anomaly
-5. [ ] Paper trade before live deployment
+1. [x] Fix Sharpe/Sortino ratio calculation in comprehensive_backtest.py
+2. [ ] Re-run backtests with corrected metrics and clean features
+3. [x] Investigate feature engineering for potential look-ahead bias - **CRITICAL ISSUES FOUND**
+4. [x] Add QC check for "no losing days" anomaly
+5. [ ] Remove leaky features from feature pipeline
+6. [ ] Paper trade before live deployment
 
-**Git Status**: Ready for initial commit (repo not yet initialized)
+### CRITICAL: Look-Ahead Bias in Top Features (Session 3 Continued)
+
+**ROOT CAUSE OF 86% WIN RATE IDENTIFIED:**
+
+The top-ranked features (`pyramid_rr_5/10/20`) use `shift(-N)` which accesses FUTURE bars:
+
+```python
+# advanced_targets.py lines 81-86 - LEAKY CODE:
+future_max = high.rolling(horizon).max().shift(-horizon)  # FUTURE DATA!
+future_min = low.rolling(horizon).min().shift(-horizon)   # FUTURE DATA!
+pyramid_rr = (future_max - close) / (close - future_min)  # RANK #1 FEATURE!
+```
+
+**Features That Must Be Removed:**
+- `pyramid_rr_5/10/20` - Top 3 features, all leaky
+- `pyramid_long/short_*` - Uses future MFE/MAE
+- `ddca_buy/sell_success_*` - Uses `close.shift(-horizon)`
+- `pivot_high/low_*` - Uses forward-looking window
+
+**Impact:** Model AUC will drop from ~84% to ~55-65% when leaky features removed.
+
+**Git Status**: Committed (d808220), 2 commits ahead of origin
 
 ---
 

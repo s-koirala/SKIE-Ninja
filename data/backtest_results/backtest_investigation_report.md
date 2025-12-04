@@ -143,16 +143,104 @@ The trading win rate exceeding model accuracy suggests the trade execution logic
 
 ---
 
-## 6. Model Comparison Summary
+## 6. CRITICAL: Feature Engineering Look-Ahead Bias
+
+**Investigation Date**: 2025-12-04
+
+### Root Cause Identified
+
+The top-ranked features used in training contain **direct look-ahead bias**:
+
+#### Top 3 Features Are Leaky!
+
+| Rank | Feature | Issue | Code Reference |
+|------|---------|-------|----------------|
+| 1 | `pyramid_rr_5` | Uses `shift(-5)` - future data | advanced_targets.py:81-101 |
+| 2 | `pyramid_rr_10` | Uses `shift(-10)` - future data | advanced_targets.py:81-101 |
+| 3 | `pyramid_rr_20` | Uses `shift(-20)` - future data | advanced_targets.py:81-101 |
+| 14 | `ddca_sell_success_10` | Uses future close price | advanced_targets.py:188-195 |
+| 21 | `ddca_buy_success_10` | Uses future close price | advanced_targets.py:188-195 |
+
+#### How The Leak Works
+
+```python
+# From advanced_targets.py lines 81-86:
+future_max = high.rolling(horizon).max().shift(-horizon)  # LOOKS INTO FUTURE!
+future_min = low.rolling(horizon).min().shift(-horizon)   # LOOKS INTO FUTURE!
+mfe = (future_max - close) / close  # Max favorable excursion
+mae = (close - future_min) / close  # Max adverse excursion
+pyramid_rr = mfe / (mae + 1e-10)    # THIS IS THE #1 FEATURE!
+```
+
+The `shift(-5)` operation takes the rolling maximum from the NEXT 5 bars and shifts it backwards to the current bar. This gives the model perfect knowledge of:
+- How high the price will go in the next N bars
+- How low the price will go in the next N bars
+- The reward-to-risk ratio of any position
+
+**This is why the model achieves 86% win rate** - it literally knows the future!
+
+### Additional Leaky Features Identified
+
+1. **Pivot Detection** (`pivot_high_*`, `pivot_low_*`):
+   - Uses forward-looking window to confirm pivots
+   - Ranks 4-12 in feature importance
+
+2. **DDCA Success Features**:
+   - `ddca_buy_success_*` and `ddca_sell_success_*`
+   - Directly uses `close.shift(-horizon)` (future price)
+
+3. **Percentile Rankings** (minor bias):
+   - Include current bar in ranking calculation
+   - Creates circular dependency
+
+### Impact Assessment
+
+| Metric | With Leaky Features | Expected Without Leak |
+|--------|---------------------|----------------------|
+| Win Rate | 86% | 50-60% |
+| Profit Factor | 18.17 | 1.2-2.0 |
+| Sharpe Ratio | 42.68 (now fixed) | 0.5-2.0 |
+| AUC-ROC | 83.5% | 55-65% |
+
+### Immediate Action Required
+
+**DO NOT DEPLOY** any model trained with these features. They will fail catastrophically in live trading.
+
+### Features That Must Be Removed
+
+```
+pyramid_rr_5, pyramid_rr_10, pyramid_rr_20
+pyramid_long_5, pyramid_long_10, pyramid_long_20
+pyramid_short_5, pyramid_short_10, pyramid_short_20
+ddca_buy_success_5, ddca_buy_success_10, ddca_buy_success_20
+ddca_sell_success_5, ddca_sell_success_10, ddca_sell_success_20
+target_mfe_*, target_mae_*
+```
+
+### Pivot Features (Require Restructuring)
+
+```
+pivot_high_5_5, pivot_high_5_10, pivot_high_10_5, pivot_high_10_10
+pivot_high_20_5, pivot_high_20_10
+pivot_low_5_5, pivot_low_5_10, pivot_low_10_5, pivot_low_10_10
+pivot_low_20_5, pivot_low_20_10
+```
+
+---
+
+## 7. Model Comparison Summary (INVALIDATED)
 
 | Model | AUC-ROC | Accuracy | Method | Notes |
 |-------|---------|----------|--------|-------|
-| LightGBM | 83.50% | 74.00% | Walk-Forward | Metrics need correction |
-| XGBoost | 83.42% | 73.84% | Walk-Forward | Metrics need correction |
-| LSTM | 66.26% | 62.17% | Purged K-Fold | More realistic metrics |
-| GRU | 66.73% | 62.58% | Purged K-Fold | More realistic metrics |
+| LightGBM | 83.50% | 74.00% | Walk-Forward | **INVALID - trained on leaky features** |
+| XGBoost | 83.42% | 73.84% | Walk-Forward | **INVALID - trained on leaky features** |
+| LSTM | 66.26% | 62.17% | Purged K-Fold | More realistic (fewer leaky features) |
+| GRU | 66.73% | 62.58% | Purged K-Fold | More realistic (fewer leaky features) |
 
-The deep learning models (LSTM, GRU) using purged k-fold CV show more realistic performance metrics, though lower accuracy. This suggests the tree models may be benefiting from some form of leakage in the walk-forward setup.
+The deep learning models (LSTM, GRU) using purged k-fold CV show more realistic performance metrics. This suggests:
+1. RNNs may be less susceptible to exploiting leaky features
+2. The purged CV methodology prevents some forms of leakage
+3. Tree models (LightGBM/XGBoost) excel at exploiting any signal, including leakage
 
 ---
 

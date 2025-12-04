@@ -1098,22 +1098,47 @@ class ComprehensiveBacktester:
             metrics.max_consecutive_losses = max_losses
 
         # === Risk-Adjusted Returns ===
-        trade_returns = [t.net_pnl for t in self.trades]
-        if len(trade_returns) > 1:
-            avg_return = np.mean(trade_returns)
-            std_return = np.std(trade_returns)
+        # IMPORTANT: Use DAILY returns for Sharpe/Sortino, not per-trade returns
+        # Per-trade annualization is incorrect and inflates ratios
+        # Reference: de Prado (2018), QuantStart best practices
 
-            # Annualized Sharpe (assuming ~250 trading days)
-            trades_per_year = metrics.trades_per_day * 250 if metrics.trades_per_day > 0 else 250
-            metrics.sharpe_ratio = (avg_return / std_return) * np.sqrt(trades_per_year) if std_return > 0 else 0
+        # Aggregate P&L by day
+        daily_pnl_dict = {}
+        for t in self.trades:
+            date_key = str(t.entry_time.date()) if hasattr(t.entry_time, 'date') else str(t.entry_time)[:10]
+            daily_pnl_dict[date_key] = daily_pnl_dict.get(date_key, 0) + t.net_pnl
 
-            # Sortino (downside deviation)
-            negative_returns = [r for r in trade_returns if r < 0]
-            downside_std = np.std(negative_returns) if negative_returns else 0
-            metrics.sortino_ratio = (avg_return / downside_std) * np.sqrt(trades_per_year) if downside_std > 0 else 0
+        daily_returns = list(daily_pnl_dict.values())
 
-            # Calmar (return / max drawdown)
-            metrics.calmar_ratio = metrics.total_net_pnl / metrics.max_drawdown if metrics.max_drawdown > 0 else float('inf')
+        if len(daily_returns) > 1:
+            avg_daily_return = np.mean(daily_returns)
+            std_daily_return = np.std(daily_returns, ddof=1)  # Sample std dev
+
+            # Annualized Sharpe Ratio: (mean_daily / std_daily) * sqrt(252)
+            # Standard annualization for daily returns
+            if std_daily_return > 0:
+                metrics.sharpe_ratio = (avg_daily_return / std_daily_return) * np.sqrt(252)
+            else:
+                metrics.sharpe_ratio = 0.0
+
+            # Sortino Ratio: Uses downside deviation (only negative returns)
+            negative_daily_returns = [r for r in daily_returns if r < 0]
+            if negative_daily_returns:
+                downside_std = np.std(negative_daily_returns, ddof=1)
+                if downside_std > 0:
+                    metrics.sortino_ratio = (avg_daily_return / downside_std) * np.sqrt(252)
+                else:
+                    metrics.sortino_ratio = 0.0
+            else:
+                # No negative days - this is suspicious, flag it
+                metrics.sortino_ratio = float('inf')
+                logger.warning("SUSPICIOUS: No losing days detected - Sortino ratio is infinite")
+
+            # Calmar Ratio: Annualized return / Max drawdown
+            # Annual return = total P&L / years traded
+            years_traded = metrics.trading_days / 252 if metrics.trading_days > 0 else 1
+            annual_return = metrics.total_net_pnl / years_traded if years_traded > 0 else 0
+            metrics.calmar_ratio = annual_return / metrics.max_drawdown if metrics.max_drawdown > 0 else float('inf')
 
         # === Model Performance ===
         if predictions and actuals:
