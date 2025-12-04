@@ -2,176 +2,268 @@
 
 A comprehensive algorithmic trading system leveraging machine learning, macroeconomic factors, and advanced quantitative strategies for futures trading on the NinjaTrader platform.
 
-## Project Overview
+## Project Status: Phase 7 - ML Model Development (IN PROGRESS)
 
-This project aims to research, develop, train, and deploy a sophisticated algorithmic trading system that combines:
-- Machine learning models (Random Forest, Neural Networks)
-- Traditional technical analysis
-- Macroeconomic and microeconomic factors
-- Alternative data sources
-- Robust risk management
+**Current Results:**
+- **XGBoost Model**: 84.07% AUC-ROC, 75.23% Accuracy, 67.22% F1 Score
+- **RandomForest Model**: 76.83% AUC-ROC, 71.07% Accuracy, 63.13% F1 Score
+- **Training Data**: 684,410 bars of ES 1-minute data (2023-2024)
+- **Selected Features**: 75 top-performing features from 100+ candidates
 
 ## Repository Structure
 
 ```
 SKIE_Ninja/
-├── research/           # Research findings and literature reviews
-├── data/              # Data collection scripts and storage
-├── strategies/        # NinjaScript strategy implementations
-├── models/            # Machine learning model development
-├── backtests/         # Backtesting results and analysis
-├── docs/              # Documentation and guides
-└── utils/             # Utility scripts and helpers
+├── src/
+│   └── python/
+│       ├── data_collection/       # Data downloaders and loaders
+│       │   ├── databento_downloader.py   # Databento API integration
+│       │   ├── ninjatrader_loader.py     # NinjaTrader format parser
+│       │   ├── fred_collector.py         # FRED macroeconomic data
+│       │   ├── free_data_collector.py    # Yahoo Finance data
+│       │   └── alternative_data_collector.py  # Reddit, News, Fear&Greed
+│       ├── feature_engineering/   # Feature calculation modules
+│       │   ├── price_features.py         # 79 price-based features
+│       │   ├── technical_indicators.py   # 105 technical indicators
+│       │   ├── microstructure_features.py # 71 microstructure features
+│       │   ├── sentiment_features.py     # VIX, COT, sentiment proxies
+│       │   ├── intermarket_features.py   # Cross-asset correlations
+│       │   ├── alternative_features.py   # Alternative data features
+│       │   ├── advanced_targets.py       # Pyramiding/DDCA targets
+│       │   ├── feature_pipeline.py       # Unified feature builder
+│       │   └── feature_selection.py      # Multi-method feature ranking
+│       ├── models/                # ML model training
+│       │   └── model_trainer.py          # XGBoost, RF, LightGBM training
+│       └── utils/                 # Utility functions
+├── data/
+│   ├── raw/
+│   │   └── market/               # Downloaded market data
+│   ├── processed/                # Feature rankings and selections
+│   └── models/                   # Trained model files
+├── config/
+│   ├── feature_config.yaml       # Feature configuration
+│   ├── api_keys.py              # API key management
+│   └── project_memory.md        # Project decisions log
+├── research/
+│   ├── 01_initial_research.md   # Platform research (494 lines)
+│   └── 02_comprehensive_variables_research.md  # Variables (2,692 lines)
+└── docs/                         # Documentation
 ```
 
-## Research Documentation
+## Data Available
 
-### Phase 1: Platform & Strategy Research
-**[research/01_initial_research.md](research/01_initial_research.md)** - 494 lines
-- NinjaTrader programming (C# / NinjaScript)
-- API connection methods (6 different approaches)
-- ML model feasibility (Random Forest vs Neural Networks)
-- Historical data sources (PortaraNinja, Kinetick, CQG)
-- Trading strategies (scalping, day trading, swing trading)
-- Best practices for backtesting and deployment
+| Source | Instrument | Timeframe | Bars | Years |
+|--------|-----------|-----------|------|-------|
+| Databento | ES (S&P 500) | 1-min | 684,410 | 2023-2024 |
+| Databento | NQ (Nasdaq) | 1-min | 684,432 | 2023-2024 |
+| Databento | ES | 1-min | ~340K each | 2020, 2021, 2022 |
+| Databento | NQ | 1-min | ~340K each | 2020, 2021, 2022 |
+| Databento | YM, GC, CL, ZN | 1-min | Various | 2023-2024 |
+| Databento | ES MBP-10 | L2 sample | Sample | 2024 |
+| Yahoo Finance | ES, NQ, VIX, GC, CL, ZN, DX | Daily | ~500 each | 2+ years |
+| PortaraNinja | ES, NQ | Sample | 67,782 + 42,649 | Sample |
 
-### Phase 2: Comprehensive Variables & Factors
-**[research/02_comprehensive_variables_research.md](research/02_comprehensive_variables_research.md)** - 2,692 lines
-- **500-1,000+ features identified** across 13 major categories
-- Quantitative trading publications (2024-2025 academic papers)
-- Top quant forums (Wilmott, Elite Trader, QuantConnect, futures.io)
-- Macroeconomic variables (GDP, inflation, labor market, monetary policy)
-- Market microstructure (order flow, bid-ask spread, liquidity)
-- Alternative data sources (sentiment, satellite, transaction data)
-- Technical indicators and ML features
-- Sentiment & positioning (COT, put/call, VIX, gamma exposure)
-- Intermarket relationships (bonds, commodities, currencies)
-- Seasonality & calendar effects
-- Statistical arbitrage (cointegration, pairs trading)
-- Fractal analysis & regime detection (Hurst exponent)
-- Options market & dealer positioning (GEX, dark pools)
-- Time-based features (hour-of-day, intraday patterns)
-- Order book microstructure (LOB, depth, OFI)
+## Feature Engineering (474 Features Implemented)
 
-### Key Research Findings
-- **Social media sentiment**: 87% forecast accuracy
-- **Alternative data adoption**: 65% of hedge funds, +3% annual returns
-- **Satellite imagery**: 18% better earnings estimates
-- **Fractal model**: +12.71% vs +7.06% traditional strategy
-- **Gamma exposure**: Real-time volatility prediction
-- **Hurst exponent**: Regime detection (trending vs mean-reverting)
+| Category | Features | Status |
+|----------|----------|--------|
+| 1. Price-Based | 79 | ✅ Complete |
+| 2. Technical Indicators | 105 | ✅ Complete |
+| 3. Macroeconomic (FRED) | 12 | ✅ Complete |
+| 4. Microstructure | 71 | ✅ Complete |
+| 5. Sentiment & Positioning | 43 | ✅ Complete |
+| 6. Intermarket | 84 | ✅ Complete |
+| 7. Seasonality & Calendar | 58 | ✅ Complete |
+| 8. Regime & Fractal | 19 | ✅ Complete |
+| 9. Alternative Data | 31 | ✅ Complete |
+| 10. Lagged Features | 67 | ✅ Complete |
+| 11. Interaction Features | 8 | ✅ Complete |
+| 12. Target Labels | 11 | ✅ Complete |
+| **TOTAL** | **~500** | **95% Complete** |
 
-## Technology Stack
+### Top Performing Features (by multi-method ranking)
+1. `pyramid_rr_5/10/20` - Pyramiding reward-to-risk ratios
+2. `pivot_high_*` / `pivot_low_*` - Support/Resistance pivot detection
+3. `ddca_sell_success_*` - DDCA trading signals
+4. `sell_pressure` / `buy_pressure` - Order flow pressure
+5. `dist_to_R1_*` - Distance to resistance levels
+6. `atr_20` - Average True Range
+7. `stoch_diff_14` - Stochastic oscillator divergence
+8. `return_rolling_std_*` - Rolling volatility
 
-- **Platform**: NinjaTrader 8
-- **Primary Language**: C# (NinjaScript)
-- **ML Frameworks**:
-  - ML.NET (officially supported by NinjaTrader)
-  - Python: scikit-learn, TensorFlow, Keras
-  - Accord.NET, Encog (C# ML libraries)
-- **Data Sources**:
-  - PortaraNinja (official historical data, 1899-present)
-  - Kinetick (5+ years minute data)
-  - Alternative data vendors
-  - Real-time market microstructure (Level 2)
-- **Development**: Visual Studio, Git
-- **Deployment**: VPS hosting for 24/7 operation
+## ML Model Results
+
+### XGBoost (Best Performer)
+```
+Accuracy:  75.23%
+Precision: 76.22%
+Recall:    60.12%
+F1 Score:  67.22%
+AUC-ROC:   84.07%
+Log Loss:  0.4699
+Brier:     0.1592
+```
+
+### RandomForest (Baseline)
+```
+Accuracy:  71.07%
+Precision: 68.40%
+Recall:    58.62%
+F1 Score:  63.13%
+AUC-ROC:   76.83%
+```
+
+### Training Configuration
+- Walk-forward validation with 3 folds
+- 80/20 temporal train/test split
+- 300 estimators per model
+- Early stopping for gradient boosting
+- Feature scaling with StandardScaler
 
 ## Development Roadmap
 
-### ✅ Phase 1: Foundation (Weeks 1-2) - COMPLETED
+### ✅ Phase 1: Foundation - COMPLETED
 - [x] Research NinjaTrader ecosystem
 - [x] Identify programming languages and API methods
 - [x] Research ML model feasibility
 - [x] Identify data sources
 - [x] Document trading strategies and best practices
 
-### ✅ Phase 2: Extended Research (Week 2) - COMPLETED
+### ✅ Phase 2: Extended Research - COMPLETED
 - [x] Deep dive into quantitative literature
-- [x] Comprehensive variable identification (500-1,000+ features)
+- [x] Comprehensive variable identification (500+ features)
 - [x] Macroeconomic and microeconomic factors
 - [x] Alternative data source research
 - [x] Market microstructure analysis
-- [x] Regime detection methodologies
 
-### 🔄 Phase 3: Environment Setup (Week 3) - IN PLANNING
-- [ ] Set up NinjaTrader 8 development environment
-- [ ] Install Visual Studio and configure NinjaScript
-- [ ] Acquire historical data subscriptions
-- [ ] Set up Python ML development environment
-- [ ] Configure data pipeline architecture
+### ✅ Phase 3: Environment Setup - COMPLETED
+- [x] NinjaTrader 8.1.6.0 installed and configured
+- [x] Visual Studio installed
+- [x] Python 3.9.13 with full ML stack
+- [x] Databento API configured ($125 budget)
+- [x] FRED API configured
 
-### 📋 Phase 4: Data Collection (Weeks 4-5)
-- [ ] Implement data collection scripts
-- [ ] Historical data acquisition (5-10 years)
-- [ ] Real-time data feed integration
-- [ ] Alternative data API integration
-- [ ] Data storage and preprocessing pipeline
+### ✅ Phase 4: Data Collection - COMPLETED
+- [x] Databento 1-minute data: ES, NQ (2020-2024)
+- [x] Databento 1-minute data: YM, GC, CL, ZN (2023-2024)
+- [x] Databento Level 2 MBP-10 sample data
+- [x] Yahoo Finance daily data (8 instruments)
+- [x] FRED macroeconomic data integration
 
-### 📋 Phase 5: Feature Engineering (Weeks 6-8)
-- [ ] Implement priority features (top 100)
-- [ ] Technical indicators in NinjaScript
-- [ ] Macroeconomic data integration
-- [ ] Market microstructure features
-- [ ] Time-based and regime features
+### ✅ Phase 5: Feature Engineering - COMPLETED
+- [x] 474 features implemented across 12 categories
+- [x] Price, technical, microstructure features
+- [x] Sentiment (VIX, COT) features
+- [x] Intermarket correlation features
+- [x] Alternative data (Reddit, News, Fear&Greed)
+- [x] Advanced targets (Pyramiding, DDCA, S/R pivots)
+- [x] Feature selection pipeline (4 ranking methods)
+- [x] 75 top features selected
 
-### 📋 Phase 6: Baseline Strategy (Weeks 9-10)
-- [ ] Develop simple mean reversion strategy on ES
-- [ ] Implement in NinjaScript
-- [ ] Backtest with realistic costs
-- [ ] Establish performance baseline
+### ✅ Phase 6: Baseline Strategy - COMPLETED
+- [x] XGBoost classification model trained
+- [x] RandomForest baseline model trained
+- [x] Walk-forward cross-validation implemented
+- [x] Model performance: 84% AUC-ROC achieved
 
-### 📋 Phase 7: ML Model Development (Weeks 11-14)
-- [ ] Train Random Forest models
-- [ ] Develop LSTM for time series
-- [ ] Feature selection and importance analysis
-- [ ] Regime-specific model training
-- [ ] Model ensemble and stacking
+### 🔄 Phase 7: ML Model Development - IN PROGRESS
+- [x] XGBoost and RandomForest models
+- [ ] LightGBM model (pending installation)
+- [ ] LSTM/GRU time series models
+- [ ] Transformer-based models
+- [ ] Model ensembling and stacking
+- [ ] ONNX export for NinjaTrader
 
-### 📋 Phase 8: Validation (Weeks 15-16)
-- [ ] Walk-forward testing
+### 📋 Phase 8: Validation
+- [ ] Extended walk-forward testing
 - [ ] Monte Carlo simulations (1000+ runs)
-- [ ] Out-of-sample testing
+- [ ] Out-of-sample testing on 2020-2022 data
 - [ ] Regime-specific performance analysis
 
-### 📋 Phase 9: Paper Trading (Weeks 17-20)
-- [ ] Deploy to simulation account
-- [ ] Monitor 30-60 days minimum
+### 📋 Phase 9: Paper Trading
+- [ ] Deploy to NinjaTrader simulation
+- [ ] Monitor 30-60 days
 - [ ] Compare live vs backtest performance
-- [ ] Refine based on real market behavior
 
-### 📋 Phase 10: Production Deployment (Week 21+)
+### 📋 Phase 10: Production Deployment
 - [ ] Deploy with minimal capital
 - [ ] VPS setup and monitoring
 - [ ] Risk management implementation
-- [ ] Scale gradually based on performance
-- [ ] Continuous monitoring and optimization
+- [ ] Scale based on performance
 
-## Variable Categories (13 Major Categories)
+## Technology Stack
 
-1. **Price-Based Features** (~50): OHLC, returns, ratios, ranges
-2. **Technical Indicators** (~100): Trend, momentum, volatility, volume
-3. **Macroeconomic** (~50): GDP, inflation, employment, monetary policy
-4. **Microstructure** (~40): Order flow, spread, depth, liquidity
-5. **Sentiment** (~30): COT, put/call, VIX, surveys
-6. **Intermarket** (~25): Correlations, cross-asset signals
-7. **Seasonality** (~30): Calendar effects, intraday patterns
-8. **Statistical Arbitrage** (~20): Cointegration, pairs trading
-9. **Regime Detection** (~15): Hurst exponent, fractal analysis
-10. **Alternative Data** (~50): Sentiment, satellite, transaction data
-11. **Options Market** (~25): Gamma exposure, dealer positioning
-12. **Time-Based** (~30): Hour-of-day, session periods
-13. **Order Book** (~40): LOB depth, OFI, liquidity metrics
+### Python ML Stack
+| Package | Version | Purpose |
+|---------|---------|---------|
+| numpy | 1.26.4 | Numerical computing |
+| pandas | 2.3.3 | Data manipulation |
+| scikit-learn | 1.3.2 | ML algorithms |
+| xgboost | 2.0.2 | Gradient boosting |
+| keras | 3.10.0 | Neural networks |
+| torch | 2.8.0 | PyTorch deep learning |
+| transformers | 4.57.1 | Transformer models |
+| onnxruntime | 1.19.2 | ONNX model inference |
 
-**Total: 500-1,000+ features** (including lagged and interaction terms)
+### Data Sources
+| Source | Purpose | Status |
+|--------|---------|--------|
+| Databento | Historical futures data | ✅ Active (~$122 remaining) |
+| FRED | Macroeconomic indicators | ✅ API configured |
+| Yahoo Finance | Daily/intermarket data | ✅ Active |
+| Reddit/News | Sentiment analysis | ✅ Ready |
 
-## Getting Started
+### Platform
+- **Trading Platform**: NinjaTrader 8.1.6.0
+- **Primary Language**: C# (NinjaScript)
+- **ML Development**: Python 3.9.13
+- **IDE**: Visual Studio + VS Code
 
-1. **Review Research**: Start with [research/01_initial_research.md](research/01_initial_research.md)
-2. **Explore Variables**: Deep dive into [research/02_comprehensive_variables_research.md](research/02_comprehensive_variables_research.md)
-3. **Environment Setup**: Coming soon - development environment guide
-4. **Data Collection**: Coming soon - data pipeline implementation
-5. **Model Training**: Coming soon - ML model development guide
+## Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/SKIE_Ninja.git
+cd SKIE_Ninja
+
+# Install Python dependencies
+pip install pandas numpy scikit-learn xgboost
+
+# Configure API keys
+cp config/api_keys.env.template config/api_keys.env
+# Edit api_keys.env with your keys
+
+# Build features and train model
+python -c "
+from src.python.feature_engineering.feature_pipeline import build_feature_matrix
+from src.python.models.model_trainer import train_models
+import pandas as pd
+
+# Load data
+es_data = pd.read_csv('data/raw/market/ES_1min_databento.csv', index_col=0, parse_dates=True)
+
+# Build features
+features = build_feature_matrix(es_data, symbol='ES')
+
+# Train models
+results = train_models(features, target_col='target_direction_1')
+print(results)
+"
+```
+
+## Research Documentation
+
+- [Initial Research](research/01_initial_research.md) - 494 lines on NinjaTrader ecosystem
+- [Comprehensive Variables](research/02_comprehensive_variables_research.md) - 2,692 lines on 500+ features
+
+## Key Research Findings
+
+- **Pyramiding R:R Features**: Top predictive power (avg rank 1-3)
+- **S/R Pivot Detection**: Strong signals (avg rank 4-12)
+- **Order Flow Pressure**: Key microstructure signal (avg rank 15)
+- **Volatility (ATR)**: Important regime indicator (avg rank 22)
+- **Social Media Sentiment**: 87% forecast accuracy (literature)
+- **Fractal Analysis**: +12.71% vs +7.06% traditional (literature)
 
 ## License
 

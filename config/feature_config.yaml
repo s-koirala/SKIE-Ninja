@@ -1,0 +1,205 @@
+# SKIE_Ninja Feature Configuration
+# Defines which features to compute and their parameters
+
+version: "1.0"
+last_updated: "2025-11-30"
+
+# Target instrument
+instrument:
+  symbol: "ES"  # S&P 500 E-mini futures
+  exchange: "CME"
+  tick_size: 0.25
+  point_value: 50
+
+# Feature categories to enable
+categories:
+  price_based:
+    enabled: true
+    features:
+      - ohlc
+      - returns: [1, 2, 5, 10, 20, 60]
+      - log_returns: [1, 5, 20]
+      - price_ratios: [high_low, close_open]
+      - range_metrics: [true_range, atr_14, atr_20]
+
+  technical_indicators:
+    enabled: true
+    features:
+      trend:
+        - sma: [10, 20, 50, 100, 200]
+        - ema: [10, 20, 50, 100, 200]
+        - adx: [14, 20]
+        - aroon: [25]
+      momentum:
+        - rsi: [14, 21]
+        - macd: [12, 26, 9]
+        - stochastic: [14, 3, 3]
+        - cci: [20]
+        - roc: [10, 20]
+      volatility:
+        - bollinger: [20, 2]
+        - atr: [14, 20]
+        - keltner: [20, 2]
+      volume:
+        - obv: true
+        - vwap: true
+        - cmf: [21]
+        - mfi: [14]
+
+  macroeconomic:
+    enabled: true
+    source: "FRED"
+    features:
+      growth:
+        - gdp_growth
+        - industrial_production
+        - ism_manufacturing
+        - retail_sales
+      labor:
+        - nonfarm_payrolls
+        - unemployment_rate
+        - initial_claims
+      inflation:
+        - cpi_headline
+        - cpi_core
+        - ppi
+        - pce_deflator
+      monetary:
+        - fed_funds_rate
+        - treasury_2y
+        - treasury_10y
+        - treasury_30y
+        - yield_curve_10y_2y
+    # Calculate surprise component (actual - consensus)
+    calculate_surprise: true
+
+  microstructure:
+    enabled: true
+    requires_level2: true
+    features:
+      - bid_ask_spread
+      - order_flow_imbalance
+      - depth_imbalance
+      - trade_intensity
+      - vpin  # Volume-synchronized probability of informed trading
+
+  sentiment_positioning:
+    enabled: true
+    features:
+      cot:
+        - commercial_net
+        - noncommercial_net
+        - open_interest
+        - cot_index
+      options:
+        - put_call_ratio
+        - vix
+        - vix_term_structure
+        - skew
+        - gex  # Gamma exposure
+      surveys:
+        - aaii_sentiment
+        - fear_greed_index
+
+  intermarket:
+    enabled: true
+    features:
+      correlations:
+        pairs:
+          - [ES, ZN]  # S&P vs 10Y Treasury
+          - [ES, VIX]
+          - [CL, DXY]  # Crude vs Dollar
+        windows: [20, 60, 120]
+      spreads:
+        - gold_silver_ratio
+        - copper_gold_ratio
+        - hy_spread
+
+  seasonality:
+    enabled: true
+    features:
+      time:
+        - hour_of_day_sin_cos
+        - day_of_week_sin_cos
+        - month_sin_cos
+        - quarter
+      calendar:
+        - turn_of_month
+        - opex_week
+        - fed_meeting_day
+        - economic_release_day
+      historical:
+        - same_month_return_5y
+        - same_month_return_15y
+
+  statistical_arbitrage:
+    enabled: true
+    features:
+      - spread_zscore
+      - half_life
+      - adf_pvalue
+      - hedge_ratio
+
+  regime_fractal:
+    enabled: true
+    features:
+      hurst:
+        windows: [20, 50, 100]
+      regime:
+        - trend_regime
+        - volatility_regime
+        - combined_regime
+
+  alternative_data:
+    enabled: true
+    features:
+      sentiment:
+        - twitter_sentiment
+        - reddit_wsb_mentions
+        - news_sentiment
+      web:
+        - google_trends
+
+  lagged_transformed:
+    enabled: true
+    lags: [1, 2, 3, 5, 10, 20]
+    apply_to:
+      - returns
+      - rsi
+      - macd
+      - order_flow_imbalance
+    rolling_stats:
+      - mean
+      - std
+      - min
+      - max
+    windows: [10, 20, 50]
+
+  interaction_features:
+    enabled: true
+    features:
+      - volume_x_momentum
+      - volatility_x_hurst
+      - time_x_returns
+      - spread_x_volume
+
+# Target labels for supervised learning
+target_labels:
+  classification:
+    - direction_1bar  # Up/Down next bar
+    - direction_5bar  # Up/Down next 5 bars
+  regression:
+    - forward_return_1bar
+    - forward_return_5bar
+    - mfe  # Maximum favorable excursion
+    - mae  # Maximum adverse excursion
+
+# Normalization settings
+normalization:
+  method: "zscore"  # zscore, minmax, rank
+  lookback: 252  # Trading days for rolling normalization
+
+# Missing data handling
+missing_data:
+  strategy: "forward_fill"  # forward_fill, interpolate, drop
+  max_consecutive_missing: 5

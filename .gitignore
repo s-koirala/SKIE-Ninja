@@ -1,0 +1,86 @@
+# SKIE_Ninja .gitignore
+
+# API Keys and Secrets
+config/api_keys.py
+config/api_keys.env
+*.env
+!*.env.template
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data files (too large for git)
+data/raw/market/*.csv
+data/raw/market/*.parquet
+data/raw/market/*.ntd
+data/processed/features/*.parquet
+data/models/*.onnx
+data/models/*.pkl
+data/models/*.joblib
+
+# Keep folder structure
+!data/raw/market/.gitkeep
+!data/raw/macro/.gitkeep
+!data/raw/sentiment/.gitkeep
+!data/raw/alternative/.gitkeep
+!data/processed/features/.gitkeep
+!data/models/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# NinjaTrader
+*.ntd
+*.ntd.bak
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test outputs
+.pytest_cache/
+.coverage
+htmlcov/
