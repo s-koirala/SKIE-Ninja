@@ -350,3 +350,133 @@ After fixes, the module generates **126 features** (down from previous count due
 2. Re-run walk-forward backtest
 3. Verify realistic performance metrics (expected: 50-60% win rate, 1-2 Sharpe)
 4. Paper trade before live deployment
+
+---
+
+## 9. RE-TEST RESULTS WITH CORRECTED FEATURES (2025-12-04)
+
+**Test Date**: 2025-12-04 10:40-10:45 UTC
+**Feature Rankings**: Regenerated with corrected (non-leaky) features
+
+### 9.1 Critical Finding: All Predictive Power Was From Leakage
+
+The re-test with corrected features confirms the catastrophic impact of look-ahead bias:
+
+#### Performance Comparison
+
+| Model | Metric | With Leaky Features | Corrected Features | Change |
+|-------|--------|---------------------|-------------------|--------|
+| **LightGBM** | Win Rate | 86.0% | 45.1% | -40.9% |
+| | Sharpe Ratio | 42.68 | -0.34 | -43.02 |
+| | Profit Factor | 18.17 | 0.96 | -17.21 |
+| | Net P&L | +$712,475 | -$4,953 | -$717,428 |
+| | Total Trades | 3,385 | 893 | -74% |
+| **XGBoost** | Win Rate | 86.3% | 46.0% | -40.3% |
+| | Sharpe Ratio | 42.63 | -1.88 | -44.51 |
+| | Profit Factor | 19.40 | 0.85 | -18.55 |
+| | Net P&L | +$718,138 | -$24,548 | -$742,686 |
+| | Total Trades | 3,395 | 1,167 | -66% |
+| **LSTM** | AUC-ROC | 66.26% | ~49% | -17% |
+| | Accuracy | 62.17% | ~49% | -13% |
+
+### 9.2 Key Findings
+
+1. **Zero True Predictive Power**: The corrected models perform at or slightly below random chance (50%), confirming that ALL apparent predictive ability came from look-ahead bias.
+
+2. **Loss-Making Strategy**: Without future information, both LightGBM and XGBoost produce negative returns, with profit factors below 1.0.
+
+3. **Negative Sharpe Ratios**: The corrected Sharpe calculations show -0.34 (LightGBM) and -1.88 (XGBoost), indicating the strategy destroys capital.
+
+4. **Fewer Trades Taken**: Trade count dropped 66-74% because the model is less confident without future data, resulting in fewer high-probability signals.
+
+5. **Deep Learning More Honest**: The LSTM model with corrected features shows ~49% AUC (random), while the leaky version showed 66.26%. This confirms even RNNs were exploiting the leakage to some degree.
+
+### 9.3 New Top Features (Non-Leaky)
+
+After regenerating feature rankings with corrected features, the top features are now legitimate:
+
+| Rank | Feature | Category |
+|------|---------|----------|
+| 1 | upper_wick_ratio | Price-Based |
+| 2 | di_diff_14 | Technical Indicator |
+| 3 | macd_signal | Technical Indicator |
+| 4 | estimated_buy_volume | Microstructure |
+| 5 | close_open_ratio | Price-Based |
+| 6 | keltner_mid_20 | Technical Indicator |
+| 7 | volume_imbalance | Microstructure |
+| 8 | bb_mid_20 | Technical Indicator |
+
+### 9.4 QC Validation Results
+
+The QC system now correctly validates realistic metrics:
+
+```
+BACKTEST VALIDATION:
+  [PASS] trade_count
+  [PASS] rth_compliance
+  [PASS] win_rate (45.1% within realistic range)
+  [PASS] profit_factor (0.96 within realistic range)
+  [PASS] has_commission
+  [PASS] has_slippage
+  [PASS] consecutive_wins
+
+FEATURE VALIDATION:
+  [PASS] data_leakage (no forward-looking features detected)
+```
+
+### 9.5 Implications
+
+1. **The Current Feature Set Has No Edge**: The technical indicators and microstructure features used provide NO predictive value for the target variable.
+
+2. **Strategy Redesign Required**: Need to:
+   - Develop new predictive features based on market research
+   - Consider different target definitions (not just next-bar direction)
+   - Explore alternative modeling approaches
+   - Potentially increase feature engineering scope
+
+3. **Positive Outcome**: The QC system successfully detected the issues, and the fix process worked correctly. The system is now producing honest, realistic metrics.
+
+### 9.6 Walk-Forward Configuration Used
+
+```
+Train Window:    180 days (14,040 bars)
+Test Window:     5 days (390 bars)
+Embargo:         42 bars
+Expected Folds:  61
+Data Points:     37,986 samples
+Features:        75 (selected from 423 total)
+```
+
+---
+
+## 10. Recommendations & Next Steps
+
+### Immediate Actions
+
+1. **Feature Engineering Research Phase**
+   - Conduct literature review on predictive features for ES futures
+   - Explore order flow/tape reading features
+   - Consider regime-based features (volatility regimes, trend regimes)
+   - Evaluate higher timeframe confluence features
+
+2. **Target Engineering**
+   - Consider multi-bar targets instead of next-bar
+   - Explore volatility-adjusted targets
+   - Test classification thresholds (not just up/down)
+
+3. **Model Architecture**
+   - Current ML models may not be suitable for this problem
+   - Consider reinforcement learning approaches
+   - Evaluate ensemble methods with diverse feature sets
+
+### Before Any Deployment
+
+1. Achieve consistent positive expectancy in walk-forward tests
+2. Paper trade for minimum 3 months
+3. Start live with minimal position size (1 contract)
+4. Gradual scale-up only with proven live performance
+
+---
+
+*Report updated: 2025-12-04*
+*Status: RE-TEST COMPLETE - Strategy requires fundamental redesign*

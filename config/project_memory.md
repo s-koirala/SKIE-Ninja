@@ -2,9 +2,54 @@
 
 **Created**: 2025-11-30
 **Last Updated**: 2025-12-04
-**Status**: Phase 7 - ML Model Development (IN PROGRESS)
+**Status**: Phase 7 - ML Model Development (CRITICAL RESET REQUIRED)
 
-## Current Session Progress (2025-12-04) - SESSION 3 COMPLETE
+## CRITICAL SESSION UPDATE (2025-12-04 Session 4) - LOOK-AHEAD BIAS CONFIRMED
+
+### CATASTROPHIC FINDING: Zero Predictive Power Without Leaky Features
+
+**The entire model's predictive capability was an illusion caused by look-ahead bias.**
+
+#### Corrected Feature Test Results
+
+| Model | Metric | With Leaky Features | Corrected Features | Change |
+|-------|--------|---------------------|-------------------|--------|
+| **LightGBM** | Win Rate | 86.0% | 45.1% | -40.9% |
+| | Sharpe Ratio | 42.68 | -0.34 | -43.02 |
+| | Profit Factor | 18.17 | 0.96 | -17.21 |
+| | Net P&L | +$712,475 | -$4,953 | -$717,428 |
+| **XGBoost** | Win Rate | 86.3% | 46.0% | -40.3% |
+| | Sharpe Ratio | 42.63 | -1.88 | -44.51 |
+| | Profit Factor | 19.40 | 0.85 | -18.55 |
+| | Net P&L | +$718,138 | -$24,548 | -$742,686 |
+| **LSTM** | AUC-ROC | 66.26% | ~49% | -17% |
+
+### Key Conclusions
+
+1. **ALL predictive power came from look-ahead bias** - Models perform at random chance without it
+2. **Current feature set has NO edge** - Technical indicators and microstructure features provide zero value
+3. **Strategy requires complete redesign** - New features needed from market research
+4. **QC system works correctly** - Successfully caught suspicious metrics
+
+### Fixes Applied
+
+1. **Sharpe/Sortino Calculation** - Now uses daily returns with sqrt(252) annualization
+2. **Pyramiding Features** - Changed from `shift(-N)` to `shift(N)` (past data only)
+3. **DDCA Features** - Measures historical pattern effectiveness instead of future success
+4. **Pivot Detection** - Confirms pivots with delay (past data only)
+5. **Feature Rankings** - Regenerated with corrected features
+
+### Status
+- [x] Sharpe ratio bug fixed
+- [x] Look-ahead bias eliminated from advanced_targets.py
+- [x] Feature rankings regenerated
+- [x] Model re-tested with corrected features
+- [ ] Feature engineering research phase (NEXT)
+- [ ] Strategy redesign required
+
+---
+
+## Previous Session Progress (2025-12-04) - SESSION 3 COMPLETE
 
 ### Session 3 Goals (COMPLETED)
 **Objective**: Test current models using full metrics backtesting framework and QC checks prior to retraining LSTM/GRU with purged k-fold CV.
