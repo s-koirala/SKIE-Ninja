@@ -1,0 +1,48 @@
+{
+  "model_type": "lstm",
+  "n_folds": 5,
+  "mean_auc": 0.6626,
+  "std_auc": 0.0046,
+  "mean_accuracy": 0.6217,
+  "std_accuracy": 0.0053,
+  "mean_f1": 0.6241,
+  "mean_precision": 0.6144,
+  "mean_recall": 0.6352,
+  "mean_log_loss": 0.6544,
+  "mean_brier": 0.2309,
+  "total_train_samples": 150976,
+  "total_test_samples": 37985,
+  "avg_epochs": 15.4,
+  "fold_details": [
+    {
+      "fold": 1,
+      "auc_roc": 0.6633,
+      "accuracy": 0.6218,
+      "f1": 0.6068
+    },
+    {
+      "fold": 2,
+      "auc_roc": 0.6697,
+      "accuracy": 0.6268,
+      "f1": 0.6304
+    },
+    {
+      "fold": 3,
+      "auc_roc": 0.6615,
+      "accuracy": 0.6216,
+      "f1": 0.6337
+    },
+    {
+      "fold": 4,
+      "auc_roc": 0.6554,
+      "accuracy": 0.612,
+      "f1": 0.6121
+    },
+    {
+      "fold": 5,
+      "auc_roc": 0.6631,
+      "accuracy": 0.6262,
+      "f1": 0.6377
+    }
+  ]
+}

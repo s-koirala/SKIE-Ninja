@@ -1,0 +1,48 @@
+{
+  "model_type": "gru",
+  "n_folds": 5,
+  "mean_auc": 0.6673,
+  "std_auc": 0.007,
+  "mean_accuracy": 0.6258,
+  "std_accuracy": 0.0064,
+  "mean_f1": 0.6403,
+  "mean_precision": 0.6108,
+  "mean_recall": 0.6737,
+  "mean_log_loss": 0.6514,
+  "mean_brier": 0.2296,
+  "total_train_samples": 150976,
+  "total_test_samples": 37985,
+  "avg_epochs": 16.2,
+  "fold_details": [
+    {
+      "fold": 1,
+      "auc_roc": 0.6715,
+      "accuracy": 0.6342,
+      "f1": 0.6488
+    },
+    {
+      "fold": 2,
+      "auc_roc": 0.6767,
+      "accuracy": 0.6286,
+      "f1": 0.6507
+    },
+    {
+      "fold": 3,
+      "auc_roc": 0.6639,
+      "accuracy": 0.6202,
+      "f1": 0.6492
+    },
+    {
+      "fold": 4,
+      "auc_roc": 0.6562,
+      "accuracy": 0.6167,
+      "f1": 0.6107
+    },
+    {
+      "fold": 5,
+      "auc_roc": 0.6682,
+      "accuracy": 0.6291,
+      "f1": 0.6419
+    }
+  ]
+}

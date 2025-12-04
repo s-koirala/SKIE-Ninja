@@ -1,0 +1,49 @@
+{
+  "timestamp": "2025-12-04 09:55:03",
+  "models": [
+    {
+      "Model": "LIGHTGBM",
+      "AUC-ROC": 83.49624789250598,
+      "Accuracy": 74.00168137873055,
+      "Win Rate": 85.99704579025111,
+      "Profit Factor": 18.170140980841065,
+      "Sharpe": 42.678633298034,
+      "Net P&L": 712475.0,
+      "Max DD": 2257.5,
+      "Trades": 3385
+    },
+    {
+      "Model": "XGBOOST",
+      "AUC-ROC": 83.42421087218229,
+      "Accuracy": 73.83774695250105,
+      "Win Rate": 86.30338733431518,
+      "Profit Factor": 19.401985906470212,
+      "Sharpe": 42.63012820057103,
+      "Net P&L": 718137.5,
+      "Max DD": 1485.0,
+      "Trades": 3395
+    },
+    {
+      "Model": "LSTM_PURGED",
+      "AUC-ROC": 66.26090641905546,
+      "Accuracy": 62.167084598125896,
+      "Win Rate": "N/A",
+      "Profit Factor": "N/A",
+      "Sharpe": "N/A",
+      "Net P&L": "N/A",
+      "Max DD": "N/A",
+      "Trades": "N/A"
+    },
+    {
+      "Model": "GRU_PURGED",
+      "AUC-ROC": 66.73329128066258,
+      "Accuracy": 62.576217500329946,
+      "Win Rate": "N/A",
+      "Profit Factor": "N/A",
+      "Sharpe": "N/A",
+      "Net P&L": "N/A",
+      "Max DD": "N/A",
+      "Trades": "N/A"
+    }
+  ]
+}
