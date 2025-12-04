@@ -15,6 +15,35 @@
 6. ✅ **LightGBM Trained** - 84.21% AUC-ROC (best model yet!)
 7. ✅ **LSTM/GRU Deep Learning** - 65.28%/65.60% AUC (underperforms gradient boosting)
 8. ✅ Deep learning trainer module created (PyTorch-based)
+9. ✅ **Walk-Forward Backtesting Framework** - Comprehensive trade simulation
+10. ✅ **RNN Hyperparameter Optimizer** - Grid search CV for LSTM/GRU with literature review
+
+### New Modules Created (2025-12-04)
+
+#### Walk-Forward Backtester (`src/python/backtesting/`)
+- **walk_forward_backtest.py** - Complete backtesting framework
+- Features:
+  - Walk-forward validation (train, validate, trade)
+  - Trade metrics: entry/exit times, P&L, drawdown, run-up
+  - Summary statistics: Win rate, Sharpe, Sortino, Calmar, profit factor
+  - Multi-model support (LightGBM, XGBoost, LSTM, GRU)
+  - ES futures contract specs ($50/point)
+  - Comprehensive reporting
+
+#### RNN Hyperparameter Optimizer (`src/python/models/rnn_hyperparameter_optimizer.py`)
+- Grid search CV for LSTM/GRU with time-series aware validation
+- Includes literature review on RNN overfitting in financial prediction
+- Key references:
+  - Fischer & Krauss (2018) - LSTM for financial prediction
+  - Shwartz-Ziv & Armon (2022) - Why gradient boosting beats deep learning on tabular data
+  - Grinsztajn et al. (2022) - Tree-based models vs deep learning
+
+### Why RNNs Underperform on This Data
+Based on literature research:
+1. **Low signal-to-noise ratio** - Financial data is inherently noisy
+2. **Pre-engineered features** - Our 75 features already capture temporal patterns
+3. **Tabular data advantage** - Gradient boosting excels when data lacks spatial/temporal structure
+4. **Overfitting risk** - RNNs have more parameters, prone to overfitting on small samples
 
 ### Model Comparison (5-min RTH data)
 
