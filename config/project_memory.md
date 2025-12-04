@@ -1,12 +1,76 @@
 # SKIE_Ninja Project Memory Base
 
 **Created**: 2025-11-30
-**Last Updated**: 2025-12-03
+**Last Updated**: 2025-12-04
 **Status**: Phase 7 - ML Model Development (IN PROGRESS)
 
-## Current Session Progress (2025-12-03)
+## Current Session Progress (2025-12-04)
 
 ### Latest Accomplishments
+1. ✅ **Rolling Window Grid Optimization Complete** - Tested 15 configurations each for 5-min and 15-min
+2. ✅ **Timeframe Decision: 5-MIN BARS** - Outperforms 15-min by ~1.3% AUC
+3. ✅ **Optimal CV Config: Train=180d, Test=5d** - 83.30% AUC-ROC
+4. ✅ Data resampler utility created for RTH filtering
+5. ✅ Rolling window optimizer script created
+6. ✅ **LightGBM Trained** - 84.21% AUC-ROC (best model yet!)
+7. ✅ **LSTM/GRU Deep Learning** - 65.28%/65.60% AUC (underperforms gradient boosting)
+8. ✅ Deep learning trainer module created (PyTorch-based)
+
+### Model Comparison (5-min RTH data)
+
+| Model | AUC-ROC | Accuracy | F1 Score | Precision | Recall |
+|-------|---------|----------|----------|-----------|--------|
+| **LightGBM** | **84.21%** | 74.40% | 73.36% | 75.62% | 71.22% |
+| XGBoost | 84.07% | 75.23% | 67.22% | 76.22% | 60.12% |
+| GRU | 65.60% | 62.03% | 62.63% | 59.36% | 66.28% |
+| LSTM | 65.28% | 62.00% | 60.99% | 60.13% | 61.88% |
+| RandomForest | 76.83% | 71.07% | 63.13% | 68.40% | 58.62% |
+
+**Key Finding**: Gradient boosting (LightGBM, XGBoost) significantly outperforms deep learning (LSTM, GRU) for tabular feature-based financial prediction. This is consistent with ML literature on tabular data.
+
+### LightGBM Top Important Features
+1. pyramid_rr_5 (92,069)
+2. pyramid_rr_10 (11,025)
+3. bars_in_session (3,995)
+4. pyramid_rr_20 (3,044)
+5. dist_to_support (592)
+6. stoch_diff_14 (545)
+7. dist_to_resistance (542)
+8. estimated_sell_volume (511)
+9. atr_20 (507)
+10. rsi_dist_50_7 (459)
+
+### Grid Optimization Results Summary
+
+#### 5-MIN BARS (WINNER)
+| Rank | Train Days | Test Days | AUC-ROC | Accuracy | Folds |
+|------|------------|-----------|---------|----------|-------|
+| 1 | **180** | **5** | **83.30%** | 73.70% | 61 |
+| 2 | 180 | 10 | 83.27% | 73.47% | 30 |
+| 3 | 180 | 20 | 83.20% | 73.43% | 15 |
+| 4 | 120 | 10 | 83.09% | 73.38% | 36 |
+| 5 | 120 | 5 | 83.06% | 73.33% | 73 |
+
+#### 15-MIN BARS
+| Rank | Train Days | Test Days | AUC-ROC | Accuracy | Folds |
+|------|------------|-----------|---------|----------|-------|
+| 1 | 180 | 5 | 82.03% | 72.18% | 60 |
+| 2 | 180 | 20 | 82.01% | 71.87% | 15 |
+| 3 | 120 | 5 | 81.83% | 72.08% | 72 |
+| 4 | 180 | 10 | 81.78% | 71.74% | 30 |
+| 5 | 120 | 10 | 81.66% | 71.70% | 36 |
+
+### Key Finding: 5-Min Outperforms 15-Min
+- **5-min best AUC: 83.30%** vs 15-min best: 82.03% (+1.27%)
+- Consistent ~1-1.5% advantage across all train/test configurations
+- 5-min provides 78 bars/day (RTH) vs 26 for 15-min = more granular signals
+- Trade-off: 5-min = more signals but potentially more noise
+
+---
+
+## Previous Session Progress (2025-12-03)
+
+### Accomplishments
 1. ✅ **Model Training Complete** - XGBoost 84% AUC, RandomForest 77% AUC
 2. ✅ **Feature Selection Complete** - 75 top features from 100+ candidates
 3. ✅ Walk-forward cross-validation implemented
@@ -198,12 +262,51 @@
 
 ## Section 4: Next Steps
 
+### CV Enhancements (2025-12-03)
+- ✅ **Rolling Window CV** - Added `window_type='rolling'` option (vs expanding)
+- ✅ **Embargo Periods** - Default 210 bars between train/test to prevent leakage
+- ✅ **Data Leakage Checks** - Automated detection of target correlation >0.95
+- ✅ **RTH Filtering** - Filter to Regular Trading Hours only
+- ✅ **Data Resampler** - Utility to convert 1-min → 5-min/15-min bars with RTH filter
+
+### Data Resampler (2025-12-04)
+**File**: `src/python/utils/data_resampler.py`
+**Usage**: `from utils import DataResampler, resample_ohlcv`
+- Converts 1-min OHLCV to any timeframe (5-min, 15-min, 30-min, 1h)
+- RTH filtering built-in (9:30 AM - 4:00 PM ET)
+- Auto-calculates CV embargo/window sizes for target timeframe
+- Tested: 684,410 1-min bars → 38,286 5-min RTH bars
+
+### Trading Hours Constraint
+**IMPORTANT: We only trade during Regular Trading Hours (RTH)**
+- **ES/NQ RTH**: 9:30 AM - 4:00 PM Eastern Time (ET)
+- **Timezone**: America/New_York
+- **Reason**: Better liquidity, tighter spreads, more reliable signals
+- **Implementation**: `filter_rth_only(df)` in model_trainer.py
+
+### Timeframe Decision (DECIDED)
+**SELECTED: 5-MIN BARS** for live trading
+| Timeframe | Bars/Day (RTH) | Embargo (bars) | Best AUC | Decision |
+|-----------|----------------|----------------|----------|----------|
+| **5-min** | 78             | 42             | **83.30%** | **SELECTED** |
+| 15-min    | 26             | 14             | 82.03%   | Rejected |
+
+**Optimal Rolling Window Configuration:**
+- **Training Window**: 180 days (~14,040 5-min bars)
+- **Test Window**: 5 days (~390 5-min bars)
+- **Embargo Period**: 42 bars (~3.5 hours)
+- **Expected Folds**: ~61 walk-forward folds
+
 ### Phase 7 Remaining Tasks
-- [ ] Install LightGBM and train model
-- [ ] Develop LSTM/GRU time series models
+- [x] **Decide trading timeframe** → 5-min bars selected
+- [x] Resample data to chosen timeframe → 38,062 5-min RTH bars
+- [x] Rolling window CV optimization → Complete (15 configs tested)
+- [x] **Install LightGBM and train model** → 84.21% AUC-ROC (BEST)
+- [x] **Develop LSTM/GRU time series models** → 65-66% AUC (underperforms)
 - [ ] Implement Transformer-based models
-- [ ] Create model ensemble
+- [ ] Create model ensemble (LightGBM + XGBoost)
 - [ ] ONNX export for NinjaTrader integration
+- [ ] Retrain final model with full historical data
 
 ### Phase 8 (Validation)
 - [ ] Extended walk-forward testing
@@ -217,6 +320,13 @@
 
 | Date | Decision | Reasoning | Reference |
 |------|----------|-----------|-----------|
+| 2025-12-04 | **5-min bars selected** | +1.27% AUC over 15-min (83.30% vs 82.03%) | Grid optimization |
+| 2025-12-04 | Train=180d, Test=5d | Best AUC config across all tested combinations | rolling_window_grid_5min.csv |
+| 2025-12-04 | 42-bar embargo for 5-min | ~3.5 hours gap to prevent data leakage | rolling_window_optimizer.py |
+| 2025-12-03 | RTH-only trading | Better liquidity, tighter spreads, reliable signals | model_trainer.py |
+| 2025-12-03 | 210-bar embargo in CV | Prevent data leakage from 200-bar features | model_trainer.py |
+| 2025-12-03 | Rolling window CV option | Test regime stability, avoid overfitting | model_trainer.py |
+| 2025-12-03 | Data leakage auto-check | Detect >0.95 correlation with target | model_trainer.py |
 | 2025-12-03 | XGBoost as primary model | Best AUC-ROC (84.07%) | Model training results |
 | 2025-12-03 | 75 features selected | Multi-method ranking, best predictive power | Feature selection |
 | 2025-12-03 | Pyramiding R:R top feature | Highest correlation with target | Feature rankings |

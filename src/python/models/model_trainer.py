@@ -121,6 +121,13 @@ class ModelConfig:
     test_size_pct: float = 0.20  # Hold out last 20% for final test
     scale_features: bool = True
 
+    # Enhanced CV settings
+    cv_window_type: str = 'expanding'  # 'expanding' or 'rolling'
+    cv_embargo_size: int = 210  # Embargo period (bars between train/test)
+    cv_max_train_size: Optional[int] = None  # Max train window for rolling
+    rth_only: bool = True  # Filter to Regular Trading Hours only
+    check_leakage: bool = True  # Run data leakage checks
+
 
 @dataclass
 class ModelMetrics:
@@ -154,14 +161,54 @@ class WalkForwardValidator:
     Unlike regular k-fold, this maintains temporal ordering:
     - Train on historical data
     - Validate on future (out-of-sample) data
-    - Progressively expand training window
+    - Supports both expanding window and rolling (sliding) window
+    - Includes embargo period to prevent data leakage
+
+    IMPORTANT: We only trade during Regular Trading Hours (RTH).
+    For ES futures: 9:30 AM - 4:00 PM ET (6:30 AM - 1:00 PM PT)
     """
 
-    def __init__(self, n_splits: int = 5, test_size: Optional[int] = None,
-                 min_train_size: Optional[int] = None):
+    def __init__(
+        self,
+        n_splits: int = 5,
+        test_size: Optional[int] = None,
+        min_train_size: Optional[int] = None,
+        max_train_size: Optional[int] = None,  # NEW: For rolling window
+        embargo_size: int = 0,  # NEW: Gap between train and test
+        window_type: str = 'expanding'  # NEW: 'expanding' or 'rolling'
+    ):
+        """
+        Initialize walk-forward validator.
+
+        Parameters:
+        -----------
+        n_splits : int
+            Number of cross-validation folds
+        test_size : int, optional
+            Size of each test fold
+        min_train_size : int, optional
+            Minimum training window size
+        max_train_size : int, optional
+            Maximum training window size (for rolling window)
+        embargo_size : int
+            Number of samples to skip between train and test
+            to prevent data leakage from features using future data
+        window_type : str
+            'expanding' - train window grows each fold (default)
+            'rolling' - train window maintains fixed size (slides)
+        """
         self.n_splits = n_splits
         self.test_size = test_size
         self.min_train_size = min_train_size
+        self.max_train_size = max_train_size
+        self.embargo_size = embargo_size
+        self.window_type = window_type
+
+        if window_type not in ['expanding', 'rolling']:
+            raise ValueError("window_type must be 'expanding' or 'rolling'")
+
+        if window_type == 'rolling' and max_train_size is None:
+            logger.warning("Rolling window requires max_train_size. Using min_train_size.")
 
     def split(self, X: np.ndarray, y: np.ndarray = None
               ) -> Tuple[np.ndarray, np.ndarray]:
@@ -174,19 +221,222 @@ class WalkForwardValidator:
         # Minimum training size
         min_train = self.min_train_size or test_size * 2
 
+        # Maximum training size (for rolling window)
+        max_train = self.max_train_size or min_train
+
         # Generate splits
         for i in range(self.n_splits):
-            # Training ends where test begins
-            test_start = min_train + i * test_size
+            # Test window starts after embargo
+            test_start = min_train + self.embargo_size + i * test_size
             test_end = test_start + test_size
 
             if test_end > n_samples:
                 break
 
-            train_idx = np.arange(0, test_start)
+            # Training window ends before embargo
+            train_end = test_start - self.embargo_size
+
+            if self.window_type == 'expanding':
+                # Expanding window: train from start to train_end
+                train_start = 0
+            else:
+                # Rolling window: train from (train_end - max_train) to train_end
+                train_start = max(0, train_end - max_train)
+
+            train_idx = np.arange(train_start, train_end)
             test_idx = np.arange(test_start, test_end)
 
             yield train_idx, test_idx
+
+    def get_n_splits(self, X: np.ndarray = None) -> int:
+        """Return the number of splits."""
+        return self.n_splits
+
+
+def filter_rth_only(df: pd.DataFrame, timezone: str = 'America/New_York') -> pd.DataFrame:
+    """
+    Filter DataFrame to Regular Trading Hours (RTH) only.
+
+    IMPORTANT: We only trade during RTH for ES futures.
+    RTH for ES/NQ: 9:30 AM - 4:00 PM Eastern Time (ET)
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame with DatetimeIndex
+    timezone : str
+        Timezone for RTH hours (default: America/New_York for ET)
+
+    Returns:
+    --------
+    pd.DataFrame
+        Filtered to RTH only
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame must have DatetimeIndex")
+
+    # Convert to Eastern Time if needed
+    if df.index.tz is None:
+        # Assume UTC if no timezone
+        idx_et = df.index.tz_localize('UTC').tz_convert(timezone)
+    else:
+        idx_et = df.index.tz_convert(timezone)
+
+    # RTH: 9:30 AM - 4:00 PM ET
+    hour = idx_et.hour
+    minute = idx_et.minute
+
+    # Create RTH mask
+    rth_mask = (
+        ((hour == 9) & (minute >= 30)) |  # 9:30 AM onwards
+        ((hour >= 10) & (hour < 16)) |     # 10:00 AM - 3:59 PM
+        ((hour == 16) & (minute == 0))     # 4:00 PM exactly
+    )
+
+    # Also exclude weekends
+    weekday_mask = idx_et.dayofweek < 5  # Monday=0 to Friday=4
+
+    final_mask = rth_mask & weekday_mask
+
+    logger.info(f"RTH filter: {final_mask.sum():,} of {len(df):,} bars "
+                f"({100*final_mask.sum()/len(df):.1f}%)")
+
+    return df[final_mask]
+
+
+def check_data_leakage(
+    features: pd.DataFrame,
+    target_col: str = 'target_direction_1',
+    lag_features: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Check for potential data leakage in feature matrix.
+
+    Data leakage sources:
+    1. Target leakage: Features correlated > 0.95 with target
+    2. Future leakage: Features using forward-looking data
+    3. Lookahead bias: Features calculated with future prices
+
+    Parameters:
+    -----------
+    features : pd.DataFrame
+        Feature matrix with targets
+    target_col : str
+        Name of target column
+    lag_features : List[str], optional
+        List of known lagged features to check
+
+    Returns:
+    --------
+    Dict with leakage analysis results
+    """
+    logger.info("Checking for data leakage...")
+    results = {
+        'target_leakage': [],
+        'high_correlation': [],
+        'suspicious_features': [],
+        'warnings': [],
+        'passed': True
+    }
+
+    if target_col not in features.columns:
+        results['warnings'].append(f"Target column '{target_col}' not found")
+        return results
+
+    target = features[target_col]
+    feature_cols = [c for c in features.columns if not c.startswith('target_')]
+
+    # Check 1: Features highly correlated with target (potential leakage)
+    for col in feature_cols:
+        if col in features.columns:
+            corr = features[col].corr(target)
+            if abs(corr) > 0.95:
+                results['target_leakage'].append((col, corr))
+                results['passed'] = False
+                logger.warning(f"TARGET LEAKAGE: {col} has {corr:.3f} correlation with target")
+            elif abs(corr) > 0.80:
+                results['high_correlation'].append((col, corr))
+                logger.warning(f"High correlation: {col} = {corr:.3f}")
+
+    # Check 2: Suspicious feature names (forward-looking)
+    forward_patterns = ['future', 'forward', 'next', 'tomorrow', 'lead']
+    for col in feature_cols:
+        col_lower = col.lower()
+        for pattern in forward_patterns:
+            if pattern in col_lower and 'target' not in col_lower:
+                results['suspicious_features'].append(col)
+                results['warnings'].append(f"Suspicious feature name: {col}")
+
+    # Check 3: Target columns that shouldn't be features
+    target_features = [c for c in feature_cols if 'target' in c.lower()]
+    if target_features:
+        results['target_leakage'].extend([(f, 1.0) for f in target_features])
+        results['warnings'].append(f"Target columns in features: {target_features}")
+        results['passed'] = False
+
+    # Check 4: Perfect prediction features
+    for col in feature_cols[:50]:  # Check first 50 for speed
+        if col in features.columns:
+            # Check if feature perfectly predicts target
+            unique_combos = features.groupby(col)[target_col].nunique()
+            if (unique_combos == 1).all():
+                results['target_leakage'].append((col, 'perfect_predictor'))
+                results['passed'] = False
+                logger.warning(f"PERFECT PREDICTOR (likely leakage): {col}")
+
+    # Summary
+    if results['passed']:
+        logger.info("Data leakage check PASSED - no obvious leakage detected")
+    else:
+        logger.error("Data leakage check FAILED - review flagged features")
+
+    return results
+
+
+def calculate_embargo_size(
+    df: pd.DataFrame,
+    max_feature_lookback: int = 200,
+    safety_margin: int = 10
+) -> int:
+    """
+    Calculate appropriate embargo size based on feature lookback periods.
+
+    The embargo prevents data leakage from:
+    - Rolling features (e.g., 200-bar MA uses future data if no embargo)
+    - Lagged targets that may peek into test set
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Data with DatetimeIndex
+    max_feature_lookback : int
+        Maximum lookback period used in features (default 200 for MA200)
+    safety_margin : int
+        Additional buffer for safety
+
+    Returns:
+    --------
+    int
+        Recommended embargo size in bars
+    """
+    # For 1-minute data, embargo should be at least max_lookback
+    # For daily data, might need fewer bars
+
+    # Detect data frequency
+    if len(df) > 1:
+        time_diff = (df.index[1] - df.index[0]).total_seconds()
+        if time_diff <= 60:  # 1-minute or less
+            # For intraday, use bars directly
+            embargo = max_feature_lookback + safety_margin
+        elif time_diff <= 3600:  # Hourly
+            embargo = max(max_feature_lookback // 60 + safety_margin, 10)
+        else:  # Daily or longer
+            embargo = max(max_feature_lookback // 390 + safety_margin, 5)  # 390 min/day
+    else:
+        embargo = max_feature_lookback + safety_margin
+
+    logger.info(f"Calculated embargo size: {embargo} bars")
+    return embargo
 
 
 class ModelTrainer:
@@ -393,6 +643,14 @@ class ModelTrainer:
         logger.info("MODEL TRAINING PIPELINE")
         logger.info("="*60)
 
+        # Check for data leakage if enabled
+        if self.config.check_leakage:
+            logger.info("\n--- Data Leakage Check ---")
+            leakage_results = check_data_leakage(features, target_col)
+            if not leakage_results['passed']:
+                logger.error("DATA LEAKAGE DETECTED! Review flagged features before proceeding.")
+                logger.error(f"Flagged: {leakage_results['target_leakage']}")
+
         # Prepare data
         X, y, feature_names = self.prepare_data(features, target_col, selected_features)
 
@@ -402,8 +660,18 @@ class ModelTrainer:
         # Scale features
         X_train_scaled, X_test_scaled = self._scale_features(X_train, X_test)
 
-        # Walk-forward validation on training set
-        wfv = WalkForwardValidator(n_splits=self.config.n_splits)
+        # Walk-forward validation on training set with enhanced options
+        logger.info(f"\n--- Cross-Validation Setup ---")
+        logger.info(f"Window type: {self.config.cv_window_type}")
+        logger.info(f"Embargo size: {self.config.cv_embargo_size} bars")
+        logger.info(f"Number of folds: {self.config.n_splits}")
+
+        wfv = WalkForwardValidator(
+            n_splits=self.config.n_splits,
+            embargo_size=self.config.cv_embargo_size,
+            window_type=self.config.cv_window_type,
+            max_train_size=self.config.cv_max_train_size
+        )
 
         results = {}
 
@@ -617,14 +885,18 @@ class ModelTrainer:
 def train_models(features: pd.DataFrame, target_col: str = 'target_direction_1',
                  selected_features: Optional[List[str]] = None,
                  output_dir: str = 'data/models',
-                 config: Optional[ModelConfig] = None) -> Dict[str, ModelMetrics]:
+                 config: Optional[ModelConfig] = None,
+                 rth_only: bool = False) -> Dict[str, ModelMetrics]:
     """
     Convenience function to train all models.
+
+    IMPORTANT: We only trade during Regular Trading Hours (RTH).
+    For ES futures: 9:30 AM - 4:00 PM Eastern Time.
 
     Parameters:
     -----------
     features : pd.DataFrame
-        Feature matrix with targets
+        Feature matrix with targets (must have DatetimeIndex)
     target_col : str
         Target column name
     selected_features : List[str], optional
@@ -633,17 +905,38 @@ def train_models(features: pd.DataFrame, target_col: str = 'target_direction_1',
         Directory to save models
     config : ModelConfig, optional
         Training configuration
+    rth_only : bool
+        If True, filter to Regular Trading Hours only
 
     Returns:
     --------
     Dict[str, ModelMetrics]
         Test set metrics for each model
     """
+    # Filter to RTH if requested
+    if rth_only:
+        logger.info("Filtering to Regular Trading Hours (RTH) only...")
+        logger.info("RTH for ES/NQ: 9:30 AM - 4:00 PM Eastern Time")
+        features = filter_rth_only(features)
+
     trainer = ModelTrainer(config)
     results = trainer.train_all_models(
         features, target_col, selected_features, output_dir
     )
     return results
+
+
+# Export all public functions
+__all__ = [
+    'ModelConfig',
+    'ModelMetrics',
+    'ModelTrainer',
+    'WalkForwardValidator',
+    'train_models',
+    'filter_rth_only',
+    'check_data_leakage',
+    'calculate_embargo_size',
+]
 
 
 if __name__ == "__main__":
