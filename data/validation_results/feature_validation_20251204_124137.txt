@@ -1,0 +1,38 @@
+SKIE-Ninja Advanced Feature Validation Results
+Timestamp: 2025-12-04 12:41:37
+
+
+TRIPLE_BARRIER
+----------------------------------------
+  label_distribution: {-1: np.float64(0.604529070678577), 1: np.float64(0.3836911664838322), 0: np.float64(0.011779762837590765)}
+  barrier_types: {-1: np.int64(22209), 1: np.int64(10289), 0: np.int64(5788)}
+  avg_holding_bars: 5.663480123282662
+  avg_return_pct: 0.005508946526128745
+  std_return_pct: 0.15596512659071463
+  num_features: 24
+  validation_checks: {'no_future_leakage': True, 'labels_not_all_same': True, 'reasonable_distribution': np.True_, 'avg_hold_reasonable': np.True_}
+
+META_LABELING
+----------------------------------------
+  meta_metrics: {'meta_accuracy': 0.633524954272276, 'meta_precision': 0.6767411300919842, 'meta_recall': 0.6204819277108434, 'meta_f1': 0.6473915776241358, 'meta_auc': 0.6452620413159488, 'primary_precision': np.float64(0.5422001567807683), 'meta_filtered_precision': np.float64(0.6767411300919842), 'precision_improvement': np.float64(0.13454097331121595), 'trades_filtered_pct': np.float64(0.502874314084139)}
+  bet_size_stats: {'mean': np.float64(0.07313284045412624), 'std': np.float64(0.0761671820325721), 'zero_pct': np.float64(0.514371570420695)}
+  validation_checks: {'meta_auc_above_random': True, 'precision_improvement': np.True_, 'bet_sizes_valid': np.True_, 'feature_importance_available': True}
+
+VOLATILITY_REGIME
+----------------------------------------
+  rv_features: 19
+  rv_21_stats: {'mean': np.float64(0.01194733340652949), 'std': np.float64(0.008462647508770509), 'min': np.float64(0.0010563778637155531), 'max': np.float64(0.15281005572263717)}
+  regime_distribution: {1: np.float64(0.5765031604241759), 2: np.float64(0.23000574622577444), 3: np.float64(0.10032387818001358), 0: np.float64(0.09316721517003604)}
+  regime_transitions: 4622
+  avg_regime_duration: 13.656663009977537
+  gmm_distribution: {2: np.float64(0.42963543708349666), 1: np.float64(0.3785966287730302), 3: np.float64(0.16931922122043644), 0: np.float64(0.02244871292303672)}
+  transition_matrix: [[0.7468460891505467, 0.2495093916456406, 0.0030838239416876925, 0.000560695262125035], [0.040231968104385646, 0.9320405944182675, 0.01762413918086263, 0.010103298296484233], [0.001135718341851221, 0.03986371379897785, 0.8663259511641113, 0.09267461669505962], [0.0013017443374121322, 0.06717000781046602, 0.20255141890132777, 0.7289768289507941]]
+  regime_stabilities: [np.float64(0.7468460891505467), np.float64(0.9320405944182675), np.float64(0.8663259511641113), np.float64(0.7289768289507941)]
+  validation_checks: {'rv_features_generated': True, 'all_regimes_present': True, 'reasonable_transitions': np.True_, 'hmm_converged': True, 'transition_probs_sum_to_1': True}
+
+COMPREHENSIVE
+----------------------------------------
+  total_features: 32
+  total_samples: 38203
+  feature_categories: {'triple_barrier': 6, 'realized_vol': 12, 'atr': 7, 'regime': 7, 'vix': 0}
+  top_correlations: [('atr_21_pct', np.float64(0.03054420192804165)), ('rv_21', np.float64(0.030249007294646767)), ('atr_14_pct', np.float64(0.028750307064609886)), ('parkinson_vol_21', np.float64(0.026664183443909677)), ('atr_21', np.float64(0.02415463029138205)), ('atr_14', np.float64(0.023297783793183577)), ('parkinson_vol_10', np.float64(0.01854893945810602)), ('rv_63', np.float64(0.017621504987634286)), ('rv_10', np.float64(0.01742763141625343)), ('parkinson_vol_63', np.float64(0.017272624158588323))]

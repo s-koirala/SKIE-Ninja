@@ -1,0 +1,50 @@
+QC Report - Data Leakage & Look-Ahead Bias Check
+============================================================
+
+Timestamp: 20251204_135502
+All Passed: False
+
+Check 1 - Feature Look-Ahead: PASSED
+
+Check 2 - Target Construction: PASSED
+  WARNING: future_atr_5 more correlated with PAST (-0.0518) than FUTURE (-0.0039)
+  WARNING: vol_expansion_5 more correlated with PAST (0.0374) than FUTURE (-0.0190)
+  WARNING: vol_contraction_5 more correlated with PAST (-0.0296) than FUTURE (0.0034)
+  WARNING: future_parkinson_5 more correlated with PAST (-0.0564) than FUTURE (-0.0175)
+  WARNING: vol_expansion_10 more correlated with PAST (0.0819) than FUTURE (-0.0260)
+  WARNING: vol_contraction_10 more correlated with PAST (-0.0694) than FUTURE (0.0171)
+  WARNING: future_rv_20 more correlated with PAST (-0.0250) than FUTURE (0.0127)
+  WARNING: vol_expansion_20 more correlated with PAST (0.0860) than FUTURE (-0.0448)
+  WARNING: vol_contraction_20 more correlated with PAST (-0.0597) than FUTURE (0.0278)
+  WARNING: trend_strength_10 more correlated with PAST (-0.0071) than FUTURE (0.0018)
+  WARNING: trend_persist_10 more correlated with PAST (-0.0089) than FUTURE (0.0028)
+  WARNING: trend_strength_20 more correlated with PAST (-0.0218) than FUTURE (-0.0065)
+  WARNING: trend_strength_30 more correlated with PAST (-0.0180) than FUTURE (0.0088)
+  WARNING: trend_persist_30 more correlated with PAST (0.0293) than FUTURE (-0.0048)
+  WARNING: momentum_5_20 more correlated with PAST (0.6421) than FUTURE (0.0313)
+  WARNING: momentum_10_30 more correlated with PAST (0.6112) than FUTURE (0.0187)
+  WARNING: momentum_20_60 more correlated with PAST (0.5473) than FUTURE (-0.0051)
+
+Check 3 - Correlations: FAILED
+  HIGH CORRELATION: rv_5 vs vol_expansion_5 = -0.3025
+  HIGH CORRELATION: return_lag10 vs new_high_10 = 0.3175
+  HIGH CORRELATION: close_vs_high_10 vs new_high_10 = 0.3564
+  HIGH CORRELATION: momentum_10 vs new_high_10 = 0.3175
+  HIGH CORRELATION: ma_dist_10 vs new_high_10 = 0.3316
+  HIGH CORRELATION: ma_dist_20 vs new_high_10 = 0.3151
+  HIGH CORRELATION: rsi_7 vs new_high_10 = 0.3602
+  HIGH CORRELATION: rsi_14 vs new_high_10 = 0.3095
+  HIGH CORRELATION: bb_pct_20 vs new_high_10 = 0.3571
+  HIGH CORRELATION: return_lag10 vs new_low_10 = -0.3035
+  HIGH CORRELATION: close_vs_low_10 vs new_low_10 = -0.3692
+  HIGH CORRELATION: close_vs_low_20 vs new_low_10 = -0.3268
+  HIGH CORRELATION: momentum_10 vs new_low_10 = -0.3035
+  HIGH CORRELATION: ma_dist_10 vs new_low_10 = -0.3184
+  HIGH CORRELATION: ma_dist_20 vs new_low_10 = -0.3062
+  HIGH CORRELATION: rsi_7 vs new_low_10 = -0.3453
+  HIGH CORRELATION: bb_pct_20 vs new_low_10 = -0.3424
+
+Check 4 - Temporal Leakage: PASSED
+
+Check 5 - Results: SUSPICIOUS
+  SUSPICIOUS: Sharpe 3.22 > 3.0
