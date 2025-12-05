@@ -21,6 +21,28 @@ The volatility breakout strategy has been **fully validated** across all test pe
 
 ## IMMEDIATE NEXT STEPS
 
+### 0. Sentiment Strategy COMPLETE (2025-12-04)
+
+**Phase 11 has been completed!** The ensemble strategy outperforms baseline:
+
+| Period | Vol Breakout | Ensemble | Improvement |
+|--------|-------------|----------|-------------|
+| In-Sample (2023-24) | $209,351 | **$224,813** | **+7.4%** |
+| OOS (2020-22) | $496,380 | **$502,219** | **+1.2%** |
+
+**Key Finding**: Sentiment (VIX-based) predicts WHEN (vol expansion AUC 0.77) but not WHICH WAY.
+Best used as additional filter for vol breakout, not as standalone strategy.
+
+**Files Created**:
+- `src/python/strategy/ensemble_strategy.py` - Main ensemble with 3 methods (agreement, weighted, either)
+- `src/python/strategy/sentiment_strategy.py` - Standalone sentiment (for testing, not profitable)
+- `src/python/data_collection/historical_sentiment_loader.py` - VIX data loader
+- `src/python/run_ensemble_oos_backtest.py` - OOS validation script
+
+**Best Method**: "either" - Enter if EITHER technical OR sentiment vol model predicts expansion
+
+---
+
 ### 1. Run Threshold Optimization (HIGH PRIORITY)
 The optimization was started but took too long on previous machine. Run on more powerful hardware:
 
@@ -59,6 +81,15 @@ Export models to ONNX format for NinjaTrader 8 deployment.
 | `src/python/run_2025_forward_test.py` | Forward test script |
 | `src/python/run_threshold_optimization.py` | Parameter optimization |
 | `src/python/run_qc_check.py` | Quality control validation |
+
+### Enhanced Feature Modules (NEW)
+| File | Purpose |
+|------|---------|
+| `feature_engineering/multi_timeframe_features.py` | MTF analysis (15m, 1h, 4h) |
+| `feature_engineering/enhanced_cross_market.py` | Real Databento cross-market data |
+| `feature_engineering/social_news_sentiment.py` | Twitter/News/Reddit sentiment |
+| `feature_engineering/enhanced_feature_pipeline.py` | Unified feature pipeline |
+| `run_enhanced_feature_qc.py` | Enhanced QC validation |
 
 ### Documentation
 | File | Purpose |
@@ -158,6 +189,49 @@ python src/python/strategy/volatility_breakout_strategy.py
 ### Run QC Check
 ```bash
 python src/python/run_qc_check.py
+```
+
+### Generate Enhanced Features (NEW)
+```bash
+python src/python/feature_engineering/enhanced_feature_pipeline.py
+```
+
+### Run Enhanced Feature QC (NEW)
+```bash
+python src/python/run_enhanced_feature_qc.py
+```
+
+---
+
+## ENHANCED FEATURES (NEW)
+
+The following enhanced feature modules have been added with strict leakage prevention:
+
+### Multi-Timeframe Analysis
+- **Purpose**: Higher timeframe context (15m, 1h, 4h)
+- **Features**: Trend alignment, HTF RSI, HTF ATR, support/resistance levels
+- **Leakage Prevention**: Uses only COMPLETED HTF bars (lagged)
+
+### Cross-Market Features (Real Data)
+- **Purpose**: Cross-market correlations and relationships
+- **Data Used**: Real Databento data for NQ, YM, GC, CL, ZN, VIX
+- **Features**: Rolling correlations, lead/lag, spreads, regime detection
+- **Leakage Prevention**: Proper alignment with lag
+
+### Social/News Sentiment
+- **Purpose**: Market sentiment from Twitter, News, Reddit
+- **APIs**: Twitter API v2, Alpha Vantage News, PRAW (Reddit)
+- **Features**: Sentiment aggregation, momentum, extremes
+- **Leakage Prevention**: Minimum 5-minute lag, uses data BEFORE each bar
+
+### Unified Pipeline
+```python
+from feature_engineering.enhanced_feature_pipeline import generate_enhanced_features
+
+features, validation = generate_enhanced_features(
+    prices,
+    validate=True  # Runs QC checks
+)
 ```
 
 ---

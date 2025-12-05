@@ -44,6 +44,11 @@
 |------|---------|--------|
 | `feature_engineering/volatility_regime.py` | VIX + regime detection | **ACTIVE** |
 | `feature_engineering/triple_barrier.py` | Triple barrier labeling | **ACTIVE** |
+| `feature_engineering/multi_timeframe_features.py` | **NEW** MTF analysis (15m, 1h, 4h) | **ACTIVE** |
+| `feature_engineering/enhanced_cross_market.py` | **NEW** Real Databento cross-market | **ACTIVE** |
+| `feature_engineering/social_news_sentiment.py` | **NEW** Twitter/News/Reddit sentiment | **ACTIVE** |
+| `feature_engineering/enhanced_feature_pipeline.py` | **NEW** Unified feature pipeline | **ACTIVE** |
+| `run_enhanced_feature_qc.py` | **NEW** Enhanced QC validation | **ACTIVE** |
 
 ### Documentation (Active)
 
@@ -54,6 +59,7 @@
 | `config/project_memory.md` | Project decision log | **ACTIVE** |
 | `config/CANONICAL_REFERENCE.md` | This file - canonical reference | **ACTIVE** |
 | `research/04_multi_target_prediction_strategy.md` | Multi-target strategy design | **ACTIVE** |
+| `research/05_sentiment_strategy_plan.md` | **NEW** Sentiment strategy & ensemble plan | **ACTIVE** |
 | `docs/methodology/BACKTEST_METHODOLOGY.md` | Backtest methodology | **ACTIVE** |
 
 ---
@@ -125,6 +131,32 @@ The volatility breakout strategy uses these **NON-LEAKY** features:
 ### Time Features (Safe)
 - `hour_sin`, `hour_cos` - Time of day encoding
 - `dow_sin`, `dow_cos` - Day of week encoding
+
+### Multi-Timeframe Features (NEW - Safe)
+- `htf_15m_*`, `htf_1h_*`, `htf_4h_*` - Higher timeframe indicators
+- `mtf_trend_alignment` - Cross-timeframe trend agreement
+- `mtf_all_bullish`, `mtf_all_bearish` - Alignment signals
+- `mtf_rsi_avg`, `mtf_vol_expansion_score` - Aggregated HTF metrics
+
+### Cross-Market Features (NEW - Safe)
+- `corr_NQ/YM/GC/CL/ZN_*` - Rolling correlations with related markets
+- `lead_*_lag*` - Lead/lag relationships (market leads ES?)
+- `es_nq_spread_*` - Tech vs Broad market spread
+- `stock_bond_spread_*` - Risk-on/Risk-off indicators
+- `vix_*` - VIX-based sentiment features
+- `risk_off_score` - Combined regime indicator
+
+### Social/News Sentiment Features (NEW - Safe)
+- `social_sentiment_*min` - Aggregated sentiment (5/15/30/60/240 min windows)
+- `social_count_*min` - News/tweet volume
+- `social_sentiment_momentum` - Short vs long-term sentiment
+- `social_extreme_bullish/bearish` - Extreme sentiment signals
+
+**CRITICAL**: All new features follow strict leakage prevention:
+- HTF features use completed bars only (lagged)
+- Cross-market data aligned with proper lag
+- Sentiment uses data from BEFORE each bar (min 5-minute lag)
+- No `shift(-N)` or `center=True` patterns
 
 ---
 
@@ -203,11 +235,23 @@ class StrategyConfig:
 
 **Total Validated Edge Across All Periods: $763,125**
 
+### Ensemble Strategy Results (NEW)
+
+The ensemble strategy combines vol breakout with VIX-based sentiment features using the "either" method (enter if either technical OR sentiment vol model predicts expansion).
+
+| Period | Vol Breakout | Ensemble | Improvement |
+|--------|-------------|----------|-------------|
+| In-Sample (2023-24) | $209,351 | **$224,813** | **+7.4%** |
+| OOS (2020-22) | $496,380 | **$502,219** | **+1.2%** |
+
+**Ensemble Total Validated: $727,032** (vs $705,731 baseline - limited to same periods)
+
 ### Model Performance
 
 | Model | In-Sample AUC | OOS AUC | Assessment |
 |-------|---------------|---------|------------|
-| Vol Expansion | 0.84 | 0.79 | Strong |
+| Vol Expansion (Tech) | 0.84 | 0.79 | Strong |
+| Vol Expansion (Sent) | 0.77 | 0.65 | Moderate |
 | Breakout High/Low | 0.72 | 0.73 | Consistent |
 | ATR Forecast R² | 0.36 | 0.30 | Good |
 
@@ -227,6 +271,7 @@ class StrategyConfig:
 | Phase 8 | Multi-Target Pivot | **BREAKTHROUGH** |
 | Phase 9 | Vol Breakout Strategy | COMPLETE |
 | Phase 10 | Production Readiness | **IN PROGRESS** |
+| Phase 11 | Sentiment Strategy & Ensemble | **COMPLETE** |
 
 ### Phase 10 TODO
 
@@ -237,6 +282,25 @@ class StrategyConfig:
 - [x] Download 2025 data for true forward test (PASSED: +$57K)
 - [ ] NinjaTrader ONNX integration
 - [ ] Paper trading validation
+
+### Phase 11 COMPLETE (Sentiment Strategy)
+
+- [x] Phase 1: Collect and validate sentiment data sources (VIX-based)
+- [x] Phase 2: Engineer sentiment features with leakage prevention
+- [x] Phase 3: Build independent sentiment-only strategy (tested, not profitable standalone)
+- [x] Phase 4-5: Skipped (sentiment not profitable as standalone)
+- [x] Phase 6: Create ensemble with volatility breakout strategy (**+7.4% in-sample, +1.2% OOS**)
+- [x] Phase 7: Document and commit to GitHub
+
+**Key Finding**: Sentiment predicts WHEN (vol expansion AUC 0.77) but not WHICH WAY.
+Best as filter for vol breakout, not standalone strategy.
+
+**Files Created**:
+- `src/python/strategy/ensemble_strategy.py` - Main ensemble implementation
+- `src/python/strategy/sentiment_strategy.py` - Standalone sentiment (for testing)
+- `src/python/data_collection/historical_sentiment_loader.py` - VIX data loader
+- `src/python/run_ensemble_oos_backtest.py` - OOS validation script
+- `research/05_sentiment_strategy_plan.md` - Phase 11 planning document
 
 ---
 
@@ -289,6 +353,18 @@ python src/python/run_oos_backtest.py
 
 ```bash
 python src/python/run_qc_check.py
+```
+
+### To Generate Enhanced Features (NEW)
+
+```bash
+python src/python/feature_engineering/enhanced_feature_pipeline.py
+```
+
+### To Run Enhanced Feature QC (NEW)
+
+```bash
+python src/python/run_enhanced_feature_qc.py
 ```
 
 ### Key Insight
