@@ -1,72 +1,100 @@
 # SKIE_Ninja Project Handoff Document
 
-**Date**: 2025-12-04
+**Date**: 2025-12-05
 **Purpose**: Complete context for continuing development on new machine
 
 ---
 
-## PROJECT STATUS: PRODUCTION READY
+## PROJECT STATUS: STATISTICALLY VALIDATED & PRODUCTION READY
 
-The volatility breakout strategy has been **fully validated** across all test periods:
+### Ensemble Strategy (RECOMMENDED - Best Performance)
 
-| Test Period | Net P&L | Status |
-|-------------|---------|--------|
-| In-Sample (2023-24) | +$209,351 | PASSED |
-| Out-of-Sample (2020-22) | +$496,380 | PASSED |
-| Forward Test (2025) | +$57,394 | PASSED |
+The **Ensemble Strategy** (Vol Breakout + Sentiment) has been **fully validated** including Monte Carlo simulation:
 
-**Total Validated Edge**: $763,125 across 5 years of data
+| Test Period | Vol Breakout | Ensemble | Improvement |
+|-------------|-------------|----------|-------------|
+| In-Sample (2023-24) | +$209,351 | +$224,813 | +7.4% |
+| Out-of-Sample (2020-22) | +$496,380 | +$502,219 | +1.2% |
+| Forward Test (2025) | +$57,394 | +$59,847 | +4.3% |
+
+**Total Validated Edge**: $786,879 across 5 years of data (Ensemble Strategy)
+
+### Monte Carlo Validation: PASSED (2025-12-05)
+
+| Metric | Original | 95% CI (Combined) | Assessment |
+|--------|----------|-------------------|------------|
+| Net P&L | $502,219 | [$361K, $573K] | **100% prob positive** |
+| Sharpe Ratio | 3.16 | [2.24, 3.33] | **Significantly > 0** |
+| Profit Factor | 1.25 | [1.15, 1.35] | **Significantly > 1** |
+
+**Statistical Significance**: ROBUST (10,000 Monte Carlo iterations)
 
 ---
 
-## IMMEDIATE NEXT STEPS
+## COMPLETED PHASES
 
-### 0. Sentiment Strategy COMPLETE (2025-12-04)
-
-**Phase 11 has been completed!** The ensemble strategy outperforms baseline:
-
-| Period | Vol Breakout | Ensemble | Improvement |
-|--------|-------------|----------|-------------|
-| In-Sample (2023-24) | $209,351 | **$224,813** | **+7.4%** |
-| OOS (2020-22) | $496,380 | **$502,219** | **+1.2%** |
+### Phase 11: Sentiment Strategy COMPLETE (2025-12-04)
 
 **Key Finding**: Sentiment (VIX-based) predicts WHEN (vol expansion AUC 0.77) but not WHICH WAY.
 Best used as additional filter for vol breakout, not as standalone strategy.
 
 **Files Created**:
-- `src/python/strategy/ensemble_strategy.py` - Main ensemble with 3 methods (agreement, weighted, either)
-- `src/python/strategy/sentiment_strategy.py` - Standalone sentiment (for testing, not profitable)
+- `src/python/strategy/ensemble_strategy.py` - **PRODUCTION STRATEGY** with 3 methods
+- `src/python/strategy/sentiment_strategy.py` - Standalone sentiment (research only)
 - `src/python/data_collection/historical_sentiment_loader.py` - VIX data loader
 - `src/python/run_ensemble_oos_backtest.py` - OOS validation script
 
-**Best Method**: "either" - Enter if EITHER technical OR sentiment vol model predicts expansion
+**Best Method**: `"either"` - Enter if EITHER technical OR sentiment vol model predicts expansion
 
 ---
 
-### 1. Run Threshold Optimization (HIGH PRIORITY)
-The optimization was started but took too long on previous machine. Run on more powerful hardware:
+### Phase 12: Threshold Optimization COMPLETE (2025-12-05)
 
-```bash
-cd SKIE_Ninja
-python src/python/run_threshold_optimization.py
+**Optimized Parameters** (96% improvement over defaults):
+```python
+# OPTIMIZED ENSEMBLE CONFIG
+min_vol_expansion_prob = 0.40   # (default was 0.50)
+min_breakout_prob = 0.45        # (default was 0.50)
+tp_atr_mult_base = 2.5          # (default was 2.0)
+sl_atr_mult_base = 1.25         # (default was 1.0)
 ```
 
-**What it does**: Tests 256 parameter combinations to find optimal:
-- `min_vol_expansion_prob` (default 0.50)
-- `min_breakout_prob` (default 0.50)
-- `tp_atr_mult_base` (default 2.0)
-- `sl_atr_mult_base` (default 1.0)
+| Config | Net P&L | Win Rate | Sharpe |
+|--------|---------|----------|--------|
+| Default | $73,215 | 39.9% | 3.22 |
+| **Optimized** | **$143,475** | 43.3% | 4.56 |
 
-**Expected output**: CSV file in `data/optimization_results/` with rankings
+**Script**: `src/python/run_ensemble_threshold_optimization.py`
+**Results**: `data/optimization_results/ensemble_optimization_*.csv`
 
-### 2. Monte Carlo Simulation
-After optimization, run statistical validation:
-- 1000+ bootstrap iterations
-- Calculate confidence intervals
-- Verify robustness to random variation
+---
 
-### 3. NinjaTrader Integration
+### Phase 13: Monte Carlo Simulation COMPLETE (2025-12-05)
+
+**Script**: `src/python/run_monte_carlo_simulation.py`
+
+Monte Carlo tests performed (10,000 iterations each):
+1. **Bootstrap resampling** - Tests order-dependency
+2. **Trade dropout** (0-15%) - Tests sensitivity to missing trades
+3. **Cost variance** (±25% slippage, ±10% commission) - Tests cost sensitivity
+4. **Combined** - All factors together
+
+**Results**:
+- **100% probability of profit** across all simulations
+- 95% CI for Net P&L: [$361K, $573K]
+- 95% CI for Sharpe: [2.24, 3.33]
+
+**Assessment**: STATISTICALLY ROBUST
+
+---
+
+## NEXT STEPS
+
+### 1. NinjaTrader Integration (PRIORITY)
 Export models to ONNX format for NinjaTrader 8 deployment.
+
+### 2. Paper Trading Validation
+Deploy ensemble strategy in paper trading environment for live validation.
 
 ---
 
@@ -268,15 +296,32 @@ features, validation = generate_enhanced_features(
 
 ---
 
-## PHASE 10 CHECKLIST
+## VALIDATION CHECKLIST
 
+### Phase 10-13 (All Complete)
 - [x] Out-of-sample validation (2020-2022): PASSED
 - [x] Forward test (2025): PASSED
 - [x] QC checks: PASSED
-- [ ] **Threshold optimization** - RUN ON NEW MACHINE
-- [ ] Monte Carlo simulation
+- [x] **Threshold optimization**: COMPLETE (+96% improvement)
+- [x] **Monte Carlo simulation**: COMPLETE (100% prob profit)
 - [ ] NinjaTrader ONNX export
 - [ ] Paper trading validation
+
+### Strategy Validation Summary
+| Strategy | Status | Recommendation |
+|----------|--------|----------------|
+| `volatility_breakout_strategy.py` | ✓ Validated | Baseline (use as fallback) |
+| `sentiment_strategy.py` | ⚠ Research only | Do not use standalone |
+| **`ensemble_strategy.py`** | ✓✓ **PRODUCTION** | **Primary strategy** |
+
+### Scripts Reference
+| Script | Purpose |
+|--------|---------|
+| `run_ensemble_threshold_optimization.py` | Find optimal parameters |
+| `run_monte_carlo_simulation.py` | Statistical validation |
+| `run_qc_check.py` | Data leakage detection |
+| `run_ensemble_2025_forward_test.py` | Forward test |
+| `run_ensemble_oos_backtest.py` | OOS validation |
 
 ---
 

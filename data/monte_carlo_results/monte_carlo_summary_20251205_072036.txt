@@ -1,0 +1,63 @@
+================================================================================
+ MONTE CARLO SIMULATION RESULTS
+ Strategy: Ensemble (Volatility Breakout + Sentiment)
+ Timestamp: 20251205_072036
+================================================================================
+
+--- Original Strategy Performance ---
+  Net P&L:       $502,218.53
+  Trades:        11426
+  Win Rate:      41.2%
+  Profit Factor: 1.25
+  Sharpe Ratio:  3.16
+  Max Drawdown:  $37,970.94
+
+--- Bootstrap Simulation (10,000 iterations) ---
+  Net P&L:
+    Mean:           $502,734.81
+    Std Dev:        $51,128.72
+    95% CI:         [$402,112.61, $601,895.13]
+    P(Profit > 0):  100.0%
+  Sharpe Ratio:
+    Mean:           2.81
+    95% CI:         [2.28, 3.33]
+
+--- Dropout Simulation (10,000 iterations) ---
+  Net P&L:
+    Mean:           $464,879.59
+    Std Dev:        $25,273.57
+    95% CI:         [$413,336.97, $502,864.22]
+    P(Profit > 0):  100.0%
+  Sharpe Ratio:
+    Mean:           3.12
+    95% CI:         [2.93, 3.29]
+
+--- Cost Variance Simulation (10,000 iterations) ---
+  Net P&L:
+    Mean:           $502,217.60
+    Std Dev:        $196.31
+    95% CI:         [$501,830.40, $502,599.28]
+    P(Profit > 0):  100.0%
+  Sharpe Ratio:
+    Mean:           3.16
+    95% CI:         [3.15, 3.16]
+
+--- Combined Simulation (10,000 iterations) ---
+  Net P&L:
+    Mean:           $464,391.08
+    Std Dev:        $54,506.38
+    95% CI:         [$361,088.12, $572,691.01]
+    P(Profit > 0):  100.0%
+  Sharpe Ratio:
+    Mean:           2.79
+    95% CI:         [2.24, 3.33]
+
+================================================================================
+ STATISTICAL SIGNIFICANCE ASSESSMENT
+================================================================================
+
+  Probability of Positive Net P&L: 100.0%
+  95% CI Sharpe > 0: YES
+  95% CI Profit Factor > 1: YES
+
+  [PASS] Strategy is STATISTICALLY ROBUST
