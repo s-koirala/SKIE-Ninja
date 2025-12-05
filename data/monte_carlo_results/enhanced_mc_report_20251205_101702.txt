@@ -1,0 +1,68 @@
+================================================================================
+ ENHANCED MONTE CARLO STRESS TEST REPORT
+ Generated: 2025-12-05 10:17:02
+================================================================================
+
+--- ORIGINAL STRATEGY PERFORMANCE ---
+  Net P&L:       $496,379.82
+  Trades:        9481
+  Win Rate:      40.4%
+  Profit Factor: 1.28
+  Sharpe Ratio:  3.09
+  Max Drawdown:  $33,595.60
+
+--- SLIPPAGE STRESS TEST ---
+| Multiplier | Mean P&L | 95% CI Lower | P(Profit>0) |
+|------------|----------|--------------|-------------|
+| 1.0x | $497,092 | $401,084 | 100.0% |
+| 2.0x | $377,515 | $282,563 | 100.0% |
+| 3.0x | $258,464 | $162,133 | 100.0% |
+| 5.0x | $18,570 | $-76,802 | 64.5% |
+
+--- DROPOUT STRESS TEST ---
+| Dropout Rate | Mean P&L | 95% CI Lower | P(Profit>0) |
+|--------------|----------|--------------|-------------|
+| 0% | $496,380 | $496,380 | 100.0% |
+| 15% | $422,166 | $387,993 | 100.0% |
+| 30% | $347,421 | $303,381 | 100.0% |
+| 50% | $248,587 | $199,492 | 100.0% |
+
+--- ADVERSE SELECTION TEST (Remove Winners) ---
+| Winners Removed | Mean P&L | 95% CI Lower | P(Profit>0) |
+|-----------------|----------|--------------|-------------|
+| 0% | $496,380 | $496,380 | 100.0% |
+| 10% | $271,198 | $258,544 | 100.0% |
+| 20% | $46,172 | $29,543 | 100.0% |
+| 30% | $-178,851 | $-197,678 | 0.0% |
+
+--- BLACK SWAN EVENT TEST ---
+  Frequency: 5% of simulations
+  Impact: 20% of max drawdown
+  Mean P&L: $490,446
+  95% CI: [$376,760, $593,552]
+  P(Profit>0): 100.0%
+
+--- COMBINED EXTREME STRESS TEST ---
+  Conditions: 3x slippage + 30% dropout + 20% adverse + 10% black swan
+  Mean P&L: $-124,118
+  Std Dev: $22,829
+  95% CI: [$-171,416, $-80,933]
+  Worst Case: $-233,704
+  P(Profit>0): 0.0%
+
+================================================================================
+ ROBUSTNESS ASSESSMENT
+================================================================================
+
+| Test | Result | Details |
+|------|--------|---------|
+| 3x Slippage | PASS | 100.0% profit probability |
+| 30% Dropout | PASS | 100.0% profit probability |
+| 20% Adverse Selection | PASS | 100.0% profit probability |
+| Combined Extreme | FAIL | 0.0% profit probability |
+
+Overall: 3 PASS, 0 MARGINAL, 1 FAIL
+
+[CONCERN] Strategy has significant vulnerabilities under stress
+
+================================================================================

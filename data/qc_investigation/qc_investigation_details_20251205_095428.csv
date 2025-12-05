@@ -1,0 +1,18 @@
+feature,target,correlation,abs_correlation,classification,reason,recommendation
+rv_5,vol_expansion_5,-0.3025,0.3025,LEGITIMATE,Realized vol relates to vol expansion - but check direction,No action needed - expected relationship
+return_lag10,new_high_10,0.3175,0.3175,LEGITIMATE,Past returns predict future direction - classic momentum,No action needed - expected relationship
+close_vs_high_10,new_high_10,0.3564,0.3564,LEGITIMATE,Close near high suggests continuation - legitimate signal,No action needed - expected relationship
+momentum_10,new_high_10,0.3175,0.3175,LEGITIMATE,Momentum directly relates to price movement direction,No action needed - expected relationship
+ma_dist_10,new_high_10,0.3316,0.3316,LEGITIMATE,Distance from MA indicates trend strength - legitimate,No action needed - expected relationship
+ma_dist_20,new_high_10,0.3151,0.3151,LEGITIMATE,Distance from MA indicates trend strength - legitimate,No action needed - expected relationship
+rsi_7,new_high_10,0.3602,0.3602,LEGITIMATE,RSI measures overbought/oversold - naturally predictive of highs/lows,No action needed - expected relationship
+rsi_14,new_high_10,0.3095,0.3095,LEGITIMATE,RSI measures overbought/oversold - naturally predictive of highs/lows,No action needed - expected relationship
+bb_pct_20,new_high_10,0.3571,0.3571,LEGITIMATE,BB position measures relative price - predictive of extremes,No action needed - expected relationship
+return_lag10,new_low_10,-0.3035,0.3035,LEGITIMATE,Past returns predict future direction - classic momentum,No action needed - expected relationship
+close_vs_low_10,new_low_10,-0.3692,0.3692,LEGITIMATE,Close near low suggests continuation - legitimate signal,No action needed - expected relationship
+close_vs_low_20,new_low_10,-0.3268,0.3268,LEGITIMATE,Close near low suggests continuation - legitimate signal,No action needed - expected relationship
+momentum_10,new_low_10,-0.3035,0.3035,LEGITIMATE,Momentum directly relates to price movement direction,No action needed - expected relationship
+ma_dist_10,new_low_10,-0.3184,0.3184,LEGITIMATE,Distance from MA indicates trend strength - legitimate,No action needed - expected relationship
+ma_dist_20,new_low_10,-0.3062,0.3062,LEGITIMATE,Distance from MA indicates trend strength - legitimate,No action needed - expected relationship
+rsi_7,new_low_10,-0.3453,0.3453,LEGITIMATE,RSI measures overbought/oversold - naturally predictive of highs/lows,No action needed - expected relationship
+bb_pct_20,new_low_10,-0.3424,0.3424,LEGITIMATE,BB position measures relative price - predictive of extremes,No action needed - expected relationship
