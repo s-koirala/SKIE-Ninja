@@ -38,6 +38,7 @@ sys.path.insert(0, str(PROJECT_ROOT / 'src' / 'python'))
 
 # Import project modules
 from data_collection.ninjatrader_loader import load_sample_data
+from data_collection.historical_sentiment_loader import HistoricalSentimentLoader, HistoricalSentimentConfig
 from strategy.volatility_breakout_strategy import VolatilityBreakoutStrategy, StrategyConfig
 from sklearn.preprocessing import StandardScaler
 
@@ -91,9 +92,14 @@ class WalkForwardONNXExporter:
         }
 
         self.feature_names = None
+        self.sentiment_feature_names = None
+        self.technical_feature_names = None
         self.schedule = []
 
-    def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        # Sentiment loader
+        self.sentiment_loader = HistoricalSentimentLoader(HistoricalSentimentConfig())
+
+    def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Load and prepare all data."""
         logger.info("Loading market data...")
 
@@ -119,25 +125,42 @@ class WalkForwardONNXExporter:
 
         logger.info(f"Prepared {len(prices)} bars")
 
-        # Generate features and targets using strategy (same as export_onnx.py)
+        # Generate technical features and targets using strategy
         strategy = VolatilityBreakoutStrategy(StrategyConfig())
-        features = strategy.generate_features(prices)
+        tech_features = strategy.generate_features(prices)
         targets = strategy.target_labeler.generate_all_targets(prices)
 
-        # Align features and targets
-        common_idx = features.index.intersection(targets.index)
-        features = features.loc[common_idx]
+        # Generate sentiment features from VIX
+        logger.info("Loading VIX sentiment data...")
+        self.sentiment_loader.load_all()
+        sent_features = self.sentiment_loader.align_to_bars(prices.index)
+
+        # Align all data
+        common_idx = tech_features.index.intersection(targets.index).intersection(sent_features.index)
+        tech_features = tech_features.loc[common_idx]
+        sent_features = sent_features.loc[common_idx]
         targets = targets.loc[common_idx]
 
         # Remove NaN
-        valid_mask = ~(features.isna().any(axis=1) | targets.isna().any(axis=1))
-        features = features[valid_mask]
+        valid_mask = ~(
+            tech_features.isna().any(axis=1) |
+            sent_features.isna().any(axis=1) |
+            targets.isna().any(axis=1)
+        )
+        tech_features = tech_features[valid_mask]
+        sent_features = sent_features[valid_mask]
         targets = targets[valid_mask]
 
-        self.feature_names = list(features.columns)
-        logger.info(f"Loaded {len(features)} samples with {len(self.feature_names)} features")
+        # Store feature names
+        self.technical_feature_names = list(tech_features.columns)
+        self.sentiment_feature_names = list(sent_features.columns)
+        self.feature_names = self.technical_feature_names  # For backward compatibility
 
-        return features, targets
+        logger.info(f"Loaded {len(tech_features)} samples")
+        logger.info(f"  Technical features: {len(self.technical_feature_names)}")
+        logger.info(f"  Sentiment features: {len(self.sentiment_feature_names)}")
+
+        return tech_features, sent_features, targets
 
     def get_fold_ranges(
         self,
@@ -184,107 +207,146 @@ class WalkForwardONNXExporter:
 
     def train_fold_models(
         self,
-        features: pd.DataFrame,
+        tech_features: pd.DataFrame,
+        sent_features: pd.DataFrame,
         targets: pd.DataFrame,
         train_start: pd.Timestamp,
         train_end: pd.Timestamp
-    ) -> Tuple[Dict, StandardScaler]:
-        """Train models for a single fold."""
+    ) -> Tuple[Dict, StandardScaler, StandardScaler]:
+        """Train models for a single fold including sentiment model."""
         # Filter to training window
-        mask = (features.index >= train_start) & (features.index <= train_end)
-        X_train = features.loc[mask].values
+        mask = (tech_features.index >= train_start) & (tech_features.index <= train_end)
+        X_tech_train = tech_features.loc[mask].values
+        X_sent_train = sent_features.loc[mask].values
 
-        if len(X_train) < 100:
-            logger.warning(f"Insufficient training data: {len(X_train)} samples")
-            return None, None
+        if len(X_tech_train) < 100:
+            logger.warning(f"Insufficient training data: {len(X_tech_train)} samples")
+            return None, None, None
 
-        # Fit scaler
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_train)
+        # Fit scalers
+        tech_scaler = StandardScaler()
+        sent_scaler = StandardScaler()
+        X_tech_scaled = tech_scaler.fit_transform(X_tech_train)
+        X_sent_scaled = sent_scaler.fit_transform(X_sent_train)
+
+        # Combined features for sentiment model (tech + sent)
+        X_combined_scaled = np.hstack([X_tech_scaled, X_sent_scaled])
 
         models = {}
 
-        # Train volatility expansion model
+        # Train technical volatility expansion model (tech features only)
         y_vol = targets.loc[mask, 'vol_expansion_5'].values
         vol_model = lgb.LGBMClassifier(**self.lgb_params)
-        vol_model.fit(X_scaled, y_vol)
+        vol_model.fit(X_tech_scaled, y_vol)
         models['vol_expansion'] = vol_model
 
-        # Train breakout high model
+        # Train SENTIMENT volatility model (combined features)
+        # This is the key addition for ensemble parity!
+        sent_vol_model = lgb.LGBMClassifier(**self.lgb_params)
+        sent_vol_model.fit(X_combined_scaled, y_vol)
+        models['sentiment_vol'] = sent_vol_model
+
+        # Train breakout high model (tech features)
         y_high = targets.loc[mask, 'new_high_10'].values
         high_model = lgb.LGBMClassifier(**self.lgb_params)
-        high_model.fit(X_scaled, y_high)
+        high_model.fit(X_tech_scaled, y_high)
         models['breakout_high'] = high_model
 
-        # Train breakout low model
+        # Train breakout low model (tech features)
         y_low = targets.loc[mask, 'new_low_10'].values
         low_model = lgb.LGBMClassifier(**self.lgb_params)
-        low_model.fit(X_scaled, y_low)
+        low_model.fit(X_tech_scaled, y_low)
         models['breakout_low'] = low_model
 
-        # Train ATR forecast model (regressor)
+        # Train ATR forecast model (tech features)
         y_atr = targets.loc[mask, 'future_atr_5'].values
         atr_params = self.lgb_params.copy()
         atr_params['objective'] = 'regression'
         atr_params['metric'] = 'rmse'
         atr_model = lgb.LGBMRegressor(**atr_params)
-        atr_model.fit(X_scaled, y_atr)
+        atr_model.fit(X_tech_scaled, y_atr)
         models['atr_forecast'] = atr_model
 
-        return models, scaler
+        return models, tech_scaler, sent_scaler
 
     def export_fold_to_onnx(
         self,
         models: Dict,
-        scaler: StandardScaler,
+        tech_scaler: StandardScaler,
+        sent_scaler: StandardScaler,
         fold_info: Dict,
         output_dir: Path
     ):
-        """Export a fold's models to ONNX format."""
+        """Export a fold's models to ONNX format including sentiment model."""
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        n_features = len(self.feature_names)
-        initial_type = [('features', FloatTensorType([None, n_features]))]
+        n_tech_features = len(self.technical_feature_names)
+        n_sent_features = len(self.sentiment_feature_names)
+        n_combined_features = n_tech_features + n_sent_features
 
-        # Export each model
-        model_files = {
+        tech_initial_type = [('features', FloatTensorType([None, n_tech_features]))]
+        combined_initial_type = [('features', FloatTensorType([None, n_combined_features]))]
+
+        # Export technical models (use tech features only)
+        tech_model_files = {
             'vol_expansion': 'vol_expansion_model.onnx',
             'breakout_high': 'breakout_high_model.onnx',
             'breakout_low': 'breakout_low_model.onnx',
             'atr_forecast': 'atr_forecast_model.onnx'
         }
 
-        for model_name, filename in model_files.items():
+        for model_name, filename in tech_model_files.items():
             model = models[model_name]
             onnx_model = convert_lightgbm(
                 model,
-                initial_types=initial_type,
+                initial_types=tech_initial_type,
                 target_opset=12
             )
             onnx.save_model(onnx_model, str(output_dir / filename))
 
-        # Export scaler parameters
+        # Export sentiment vol model (uses combined features)
+        sent_vol_model = models['sentiment_vol']
+        sent_onnx_model = convert_lightgbm(
+            sent_vol_model,
+            initial_types=combined_initial_type,
+            target_opset=12
+        )
+        onnx.save_model(sent_onnx_model, str(output_dir / 'sentiment_vol_model.onnx'))
+
+        # Export technical scaler parameters
         scaler_params = {
-            'feature_names': self.feature_names,
-            'means': scaler.mean_.tolist(),
-            'scales': scaler.scale_.tolist(),
-            'n_features': n_features
+            'feature_names': self.technical_feature_names,
+            'means': tech_scaler.mean_.tolist(),
+            'scales': tech_scaler.scale_.tolist(),
+            'n_features': n_tech_features
         }
         with open(output_dir / 'scaler_params.json', 'w') as f:
             json.dump(scaler_params, f, indent=2)
 
-        # Export strategy config with optimized thresholds
+        # Export sentiment scaler parameters
+        sent_scaler_params = {
+            'feature_names': self.sentiment_feature_names,
+            'means': sent_scaler.mean_.tolist(),
+            'scales': sent_scaler.scale_.tolist(),
+            'n_features': n_sent_features
+        }
+        with open(output_dir / 'sentiment_scaler_params.json', 'w') as f:
+            json.dump(sent_scaler_params, f, indent=2)
+
+        # Export strategy config with ensemble thresholds
         # NOTE: Keys must match C# StrategyConfig property names exactly
         strategy_config = {
-            'min_vol_expansion_prob': 0.40,
+            'min_vol_expansion_prob': 0.40,       # Technical vol threshold
+            'min_sentiment_vol_prob': 0.55,       # Sentiment vol threshold (NEW!)
             'min_breakout_prob': 0.45,
-            'tp_atr_mult_base': 2.5,           # Optimized (Phase 12)
-            'sl_atr_mult_base': 1.25,          # Optimized (Phase 12)
+            'tp_atr_mult_base': 2.5,
+            'sl_atr_mult_base': 1.25,
             'tp_adjustment_factor': 0.25,
             'max_holding_bars': 20,
             'base_contracts': 1,
             'max_contracts': 3,
             'vol_sizing_factor': 1.0,
+            'ensemble_mode': 'agreement',          # Both filters must pass
             'fold_info': {
                 'train_start': fold_info['train_start'].isoformat(),
                 'train_end': fold_info['train_end'].isoformat(),
@@ -302,16 +364,16 @@ class WalkForwardONNXExporter:
         start_date: Optional[str] = None,
         max_folds: Optional[int] = None
     ) -> List[Dict]:
-        """Export ONNX models for all walk-forward folds."""
+        """Export ONNX models for all walk-forward folds including sentiment model."""
         if not ONNX_AVAILABLE:
             raise RuntimeError("ONNX dependencies not available. Install: pip install onnxmltools onnx onnxruntime lightgbm")
 
-        # Load data
-        features, targets = self.load_data()
+        # Load data (now returns tech + sentiment features)
+        tech_features, sent_features, targets = self.load_data()
 
         # Get fold ranges
-        data_start = features.index.min()
-        data_end = features.index.max()
+        data_start = tech_features.index.min()
+        data_end = tech_features.index.max()
         folds = self.get_fold_ranges(data_start, data_end, start_date)
 
         if max_folds:
@@ -326,9 +388,9 @@ class WalkForwardONNXExporter:
             logger.info(f"  Train: {fold_info['train_start'].date()} to {fold_info['train_end'].date()}")
             logger.info(f"  Valid: {fold_info['test_start'].date()} to {fold_info['test_end'].date()}")
 
-            # Train models
-            models, scaler = self.train_fold_models(
-                features, targets,
+            # Train models (including sentiment model)
+            models, tech_scaler, sent_scaler = self.train_fold_models(
+                tech_features, sent_features, targets,
                 fold_info['train_start'],
                 fold_info['train_end']
             )
@@ -337,9 +399,9 @@ class WalkForwardONNXExporter:
                 logger.warning(f"  Skipping fold {fold_id} - insufficient data")
                 continue
 
-            # Export to ONNX
+            # Export to ONNX (including sentiment model)
             fold_dir = self.output_base_dir / f"fold_{fold_id}"
-            self.export_fold_to_onnx(models, scaler, fold_info, fold_dir)
+            self.export_fold_to_onnx(models, tech_scaler, sent_scaler, fold_info, fold_dir)
 
             successful_folds.append({
                 'fold': fold_info['fold'],
@@ -347,8 +409,9 @@ class WalkForwardONNXExporter:
                 'folder': str(fold_dir),
                 'valid_from': fold_info['test_start'].strftime('%Y-%m-%d'),
                 'valid_until': fold_info['test_end'].strftime('%Y-%m-%d'),
-                'train_samples': len(features[(features.index >= fold_info['train_start']) &
-                                               (features.index <= fold_info['train_end'])])
+                'train_samples': len(tech_features[(tech_features.index >= fold_info['train_start']) &
+                                                    (tech_features.index <= fold_info['train_end'])]),
+                'has_sentiment_model': True
             })
 
         # Save schedule

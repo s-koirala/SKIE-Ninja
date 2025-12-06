@@ -49,8 +49,11 @@ namespace SKIENinjaML
         private InferenceSession _highModel;
         private InferenceSession _lowModel;
         private InferenceSession _atrModel;
+        private InferenceSession _sentimentVolModel;
         private ScalerParams _scalerParams;
+        private ScalerParams _sentimentScalerParams;
         private StrategyConfig _config;
+        private bool _hasSentimentModel = false;
 
         private SessionOptions _sessionOptions;
         private bool _isInitialized = false;
@@ -233,6 +236,18 @@ namespace SKIENinjaML
                 throw new FileNotFoundException(String.Format("Scaler params not found: {0}", scalerPath));
             }
 
+            // Load sentiment scaler params if available
+            string sentimentScalerPath = Path.Combine(modelPath, "sentiment_scaler_params.json");
+            if (File.Exists(sentimentScalerPath))
+            {
+                string json = File.ReadAllText(sentimentScalerPath);
+                _sentimentScalerParams = JsonConvert.DeserializeObject<ScalerParams>(json);
+            }
+            else
+            {
+                _sentimentScalerParams = null;
+            }
+
             // Load strategy config
             string configPath = Path.Combine(modelPath, "strategy_config.json");
             if (File.Exists(configPath))
@@ -254,6 +269,21 @@ namespace SKIENinjaML
                 Path.Combine(modelPath, "breakout_low_model.onnx"), _sessionOptions);
             _atrModel = new InferenceSession(
                 Path.Combine(modelPath, "atr_forecast_model.onnx"), _sessionOptions);
+
+            // Load sentiment volatility model if available
+            string sentimentModelPath = Path.Combine(modelPath, "sentiment_vol_model.onnx");
+            if (File.Exists(sentimentModelPath) && _sentimentScalerParams != null)
+            {
+                _sentimentVolModel = new InferenceSession(sentimentModelPath, _sessionOptions);
+                _hasSentimentModel = true;
+                Log("  Loaded sentiment volatility model (28 sentiment features)");
+            }
+            else
+            {
+                _sentimentVolModel = null;
+                _hasSentimentModel = false;
+                Log("  WARNING: Sentiment model not found - using technical filter only");
+            }
         }
 
         /// <summary>
@@ -265,6 +295,8 @@ namespace SKIENinjaML
             if (_highModel != null) { _highModel.Dispose(); _highModel = null; }
             if (_lowModel != null) { _lowModel.Dispose(); _lowModel = null; }
             if (_atrModel != null) { _atrModel.Dispose(); _atrModel = null; }
+            if (_sentimentVolModel != null) { _sentimentVolModel.Dispose(); _sentimentVolModel = null; }
+            _hasSentimentModel = false;
         }
 
         /// <summary>
@@ -282,6 +314,38 @@ namespace SKIENinjaML
                 scaled[i] = (float)((features[i] - means[i]) / scales[i]);
             }
             return scaled;
+        }
+
+        /// <summary>
+        /// Scale combined features (technical + sentiment) for sentiment model.
+        /// The sentiment model expects: [42 scaled tech features] + [28 scaled sentiment features]
+        /// </summary>
+        private float[] ScaleCombinedFeatures(double[] techFeatures, double[] sentimentFeatures)
+        {
+            if (_sentimentScalerParams == null)
+            {
+                throw new InvalidOperationException("Sentiment scaler not loaded");
+            }
+
+            // Scale technical features first
+            float[] scaledTech = ScaleFeatures(techFeatures);
+
+            // Scale sentiment features
+            List<double> sentMeans = _sentimentScalerParams.GetMeans();
+            List<double> sentScales = _sentimentScalerParams.GetScales();
+
+            float[] scaledSent = new float[sentimentFeatures.Length];
+            for (int i = 0; i < sentimentFeatures.Length; i++)
+            {
+                scaledSent[i] = (float)((sentimentFeatures[i] - sentMeans[i]) / sentScales[i]);
+            }
+
+            // Combine into single array
+            float[] combined = new float[scaledTech.Length + scaledSent.Length];
+            Array.Copy(scaledTech, 0, combined, 0, scaledTech.Length);
+            Array.Copy(scaledSent, 0, combined, scaledTech.Length, scaledSent.Length);
+
+            return combined;
         }
 
         /// <summary>
@@ -351,10 +415,23 @@ namespace SKIENinjaML
         }
 
         /// <summary>
-        /// Generate trading signal from features.
+        /// Generate trading signal from features (backward compatible - no sentiment).
         /// Must call EnsureModelForDate() first to load appropriate model.
         /// </summary>
         public TradingSignal GenerateSignal(double[] features, double currentATR)
+        {
+            // Call full method with null sentiment features
+            return GenerateSignal(features, null, currentATR);
+        }
+
+        /// <summary>
+        /// Generate trading signal from features with optional sentiment data.
+        /// Must call EnsureModelForDate() first to load appropriate model.
+        /// </summary>
+        /// <param name="techFeatures">42 technical features</param>
+        /// <param name="sentimentFeatures">28 sentiment features (can be null if VIX not available)</param>
+        /// <param name="currentATR">Current ATR for position sizing</param>
+        public TradingSignal GenerateSignal(double[] techFeatures, double[] sentimentFeatures, double currentATR)
         {
             if (_currentEntry == null || _volModel == null)
             {
@@ -364,27 +441,62 @@ namespace SKIENinjaML
 
             TradingSignal signal = new TradingSignal();
 
-            // Scale features
-            float[] scaledFeatures = ScaleFeatures(features);
+            // Scale technical features
+            float[] scaledTechFeatures = ScaleFeatures(techFeatures);
 
-            // Get predictions
-            double volProb = RunClassifier(_volModel, scaledFeatures);
-            double highProb = RunClassifier(_highModel, scaledFeatures);
-            double lowProb = RunClassifier(_lowModel, scaledFeatures);
-            double predictedATR = RunRegressor(_atrModel, scaledFeatures);
+            // Get technical predictions
+            double volProb = RunClassifier(_volModel, scaledTechFeatures);
+            double highProb = RunClassifier(_highModel, scaledTechFeatures);
+            double lowProb = RunClassifier(_lowModel, scaledTechFeatures);
+            double predictedATR = RunRegressor(_atrModel, scaledTechFeatures);
 
             signal.VolExpansionProb = volProb;
             signal.PredictedATR = predictedATR;
 
-            // 1. Volatility filter
-            if (volProb < _config.min_vol_expansion_prob)
+            // 1. Technical volatility filter
+            bool techVolPass = volProb >= _config.min_vol_expansion_prob;
+
+            // 2. Sentiment volatility filter (if available)
+            double sentVolProb = 0.0;
+            bool sentVolPass = true; // Default to pass if no sentiment model
+
+            if (_hasSentimentModel && sentimentFeatures != null && sentimentFeatures.Length == 28)
+            {
+                // Scale combined features and run sentiment model
+                float[] scaledCombined = ScaleCombinedFeatures(techFeatures, sentimentFeatures);
+                sentVolProb = RunClassifier(_sentimentVolModel, scaledCombined);
+                signal.SentimentVolProb = sentVolProb;
+
+                // Apply sentiment threshold
+                sentVolPass = sentVolProb >= _config.min_sentiment_vol_prob;
+            }
+            else
+            {
+                // No sentiment model - skip sentiment filter
+                signal.SentimentVolProb = -1.0; // Indicates not available
+            }
+
+            // 3. Apply ensemble 'agreement' mode: BOTH filters must pass
+            bool passedVolFilters = false;
+            if (_config.ensemble_mode == "agreement")
+            {
+                // Both must pass
+                passedVolFilters = techVolPass && sentVolPass;
+            }
+            else
+            {
+                // Default: only technical filter
+                passedVolFilters = techVolPass;
+            }
+
+            if (!passedVolFilters)
             {
                 signal.ShouldTrade = false;
                 signal.Direction = 0;
                 return signal;
             }
 
-            // 2. Direction from breakout probabilities
+            // 4. Direction from breakout probabilities
             bool highSignal = highProb >= _config.min_breakout_prob;
             bool lowSignal = lowProb >= _config.min_breakout_prob;
 
@@ -420,14 +532,14 @@ namespace SKIENinjaML
 
             signal.ShouldTrade = true;
 
-            // 3. Position sizing (inverse volatility)
+            // 5. Position sizing (inverse volatility)
             double volFactor = currentATR / (predictedATR + 1e-10);
             volFactor = Math.Max(0.5, Math.Min(2.0, volFactor));
 
             signal.Contracts = (int)(_config.base_contracts * volFactor * _config.vol_sizing_factor);
             signal.Contracts = Math.Max(1, Math.Min(signal.Contracts, _config.max_contracts));
 
-            // 4. Dynamic exits based on predicted ATR
+            // 6. Dynamic exits based on predicted ATR
             double tpMult = _config.tp_atr_mult_base *
                 (1 + _config.tp_adjustment_factor * (signal.BreakoutProb - 0.5));
             double slMult = _config.sl_atr_mult_base;
@@ -439,7 +551,7 @@ namespace SKIENinjaML
         }
 
         /// <summary>
-        /// Get the number of features expected by the current model.
+        /// Get the number of technical features expected by the current model.
         /// </summary>
         public int GetFeatureCount()
         {
@@ -448,6 +560,26 @@ namespace SKIENinjaML
                 return _scalerParams.n_features;
             }
             return 42; // Default expected feature count
+        }
+
+        /// <summary>
+        /// Get the number of sentiment features expected (always 28 if sentiment model loaded).
+        /// </summary>
+        public int GetSentimentFeatureCount()
+        {
+            if (_hasSentimentModel && _sentimentScalerParams != null)
+            {
+                return _sentimentScalerParams.n_features;
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Check if sentiment model is loaded and available.
+        /// </summary>
+        public bool HasSentimentModel()
+        {
+            return _hasSentimentModel;
         }
 
         /// <summary>

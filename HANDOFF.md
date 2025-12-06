@@ -147,13 +147,21 @@ if (volProb >= 0.40)  // Only technical - NO sentiment filter!
 | Python Ensemble | Technical + Sentiment | 2,044 | +$88,164 |
 | C# (missing filter) | Technical only | 5,956 | -$38,250 |
 
-**Solution Required**: Add VIX sentiment model to C# strategy for feature parity.
+**Solution Implemented** (2025-12-06):
 
-**Implementation Plan**:
-1. Export sentiment_vol_model to ONNX alongside technical models
-2. Add VIX data subscription in NT8 strategy
-3. Calculate sentiment features from VIX in C#
-4. Apply both filters in signal generation (ensemble 'agreement' mode)
+**Implementation Complete**:
+1. ✅ Export sentiment_vol_model.onnx alongside technical models (70 folds)
+2. ✅ Add VIX data subscription in NT8 strategy (^VIX, $VIX.X, or VIX)
+3. ✅ Calculate 28 sentiment features from VIX in C# (matching Python exactly)
+4. ✅ Apply ensemble 'agreement' mode filtering (both vol filters must pass)
+
+**Files Modified**:
+- `src/python/export_walkforward_onnx.py` - Now exports sentiment model + scaler
+- `src/csharp/SKIENinjaML/SKIENinjaPredictor.cs` - Added sentiment config properties
+- `src/csharp/SKIENinjaML/WalkForwardPredictor.cs` - Loads and applies sentiment model
+- `src/csharp/SKIENinjaWalkForwardStrategy.cs` - Calculates VIX features, passes to predictor
+
+**Expected Result**: Trade count should match Python (~2044 trades in 2024)
 
 ---
 

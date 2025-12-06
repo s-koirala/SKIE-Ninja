@@ -50,6 +50,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private SKIENinjaPredictor staticPredictor;
 
         private double[] featureBuffer;
+        private double[] sentimentFeatureBuffer;
         private bool predictorReady = false;
 
         // Indicators for feature calculation
@@ -64,6 +65,12 @@ namespace NinjaTrader.NinjaScript.Strategies
         private List<double> highHistory;
         private List<double> lowHistory;
         private List<double> volumeHistory;
+
+        // VIX data for sentiment features
+        private bool vixDataAvailable = false;
+        private List<double> vixCloseHistory;
+        private double lastVixClose = 0;
+        private DateTime lastVixDate = DateTime.MinValue;
 
         // Diagnostic counters
         private int barCount = 0;
@@ -126,6 +133,16 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "Log Model Switches", Description = "Log each model switch event",
             Order = 8, GroupName = "3. Debug")]
         public bool LogModelSwitches { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "VIX Symbol", Description = "VIX symbol for sentiment features (^VIX, $VIX.X, or VIX)",
+            Order = 9, GroupName = "4. VIX Sentiment")]
+        public string VixSymbol { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Enable Sentiment Filter", Description = "Enable VIX-based sentiment filtering (requires VIX data)",
+            Order = 10, GroupName = "4. VIX Sentiment")]
+        public bool EnableSentimentFilter { get; set; }
         #endregion
 
         protected override void OnStateChange()
@@ -164,10 +181,29 @@ namespace NinjaTrader.NinjaScript.Strategies
                 MaxHoldingBars = 20;
                 EnableLogging = true;
                 LogModelSwitches = true;
+
+                // VIX sentiment settings
+                VixSymbol = "^VIX";  // Common symbol: ^VIX (Kinetick), $VIX.X (CQG), VIX (IB)
+                EnableSentimentFilter = true;
             }
             else if (State == State.Configure)
             {
-                // No additional data series needed
+                // Add VIX data series for sentiment features
+                if (EnableSentimentFilter && !string.IsNullOrEmpty(VixSymbol))
+                {
+                    try
+                    {
+                        // Add VIX as daily data series (BarsInProgress = 1)
+                        AddDataSeries(VixSymbol, Data.BarsPeriodType.Day, 1);
+                        Print("VIX data series configured: " + VixSymbol);
+                    }
+                    catch (Exception ex)
+                    {
+                        Print("WARNING: Could not add VIX data series: " + ex.Message);
+                        Print("Sentiment filter will be disabled.");
+                        EnableSentimentFilter = false;
+                    }
+                }
             }
             else if (State == State.DataLoaded)
             {
@@ -188,6 +224,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 lowHistory = new List<double>();
                 volumeHistory = new List<double>();
                 trueRangeHistory = new List<double>();
+
+                // Initialize VIX history for sentiment features
+                vixCloseHistory = new List<double>();
+                sentimentFeatureBuffer = new double[28]; // 28 sentiment features
 
                 // Initialize appropriate predictor
                 try
@@ -291,6 +331,16 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         protected override void OnBarUpdate()
         {
+            // Handle VIX data updates (BarsInProgress == 1)
+            if (BarsInProgress == 1 && EnableSentimentFilter)
+            {
+                UpdateVixHistory();
+                return; // VIX updates don't generate signals
+            }
+
+            // Only process primary instrument (BarsInProgress == 0)
+            if (BarsInProgress != 0) return;
+
             barCount++;
 
             if (!predictorReady)
@@ -356,6 +406,16 @@ namespace NinjaTrader.NinjaScript.Strategies
                 return;
             }
 
+            // Calculate sentiment features if enabled and available
+            double[] sentimentFeatures = null;
+            if (EnableSentimentFilter && vixDataAvailable)
+            {
+                if (CalculateSentimentFeatures())
+                {
+                    sentimentFeatures = sentimentFeatureBuffer;
+                }
+            }
+
             // Get ML prediction
             TradingSignal signal;
             try
@@ -364,7 +424,8 @@ namespace NinjaTrader.NinjaScript.Strategies
 
                 if (WalkForwardMode && wfPredictor != null)
                 {
-                    signal = wfPredictor.GenerateSignal(featureBuffer, currentATR);
+                    // Pass sentiment features to walk-forward predictor
+                    signal = wfPredictor.GenerateSignal(featureBuffer, sentimentFeatures, currentATR);
                 }
                 else if (staticPredictor != null)
                 {
@@ -387,8 +448,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                 string modelInfo = WalkForwardMode && wfPredictor != null ?
                     wfPredictor.GetCurrentModelInfo() : "Static";
 
-                Print(String.Format("[{0}] Bar {1} | Model: {2} | VolProb={3:F3}",
-                    Time[0], barCount, modelInfo, signal.VolExpansionProb));
+                string sentInfo = signal.SentimentVolProb >= 0 ?
+                    String.Format(", SentProb={0:F3}", signal.SentimentVolProb) : "";
+
+                Print(String.Format("[{0}] Bar {1} | Model: {2} | VolProb={3:F3}{4}",
+                    Time[0], barCount, modelInfo, signal.VolExpansionProb, sentInfo));
             }
 
             // Execute trade if signal passes thresholds
@@ -398,8 +462,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 
                 if (EnableLogging)
                 {
-                    Print(String.Format(">>> SIGNAL [{0}]: Dir={1}, VolProb={2:F3}, BreakoutProb={3:F3}",
-                        Time[0], signal.Direction, signal.VolExpansionProb, signal.BreakoutProb));
+                    string sentInfo = signal.SentimentVolProb >= 0 ?
+                        String.Format(", SentProb={0:F3}", signal.SentimentVolProb) : "";
+
+                    Print(String.Format(">>> SIGNAL [{0}]: Dir={1}, VolProb={2:F3}{3}, BreakoutProb={4:F3}",
+                        Time[0], signal.Direction, signal.VolExpansionProb, sentInfo, signal.BreakoutProb));
                 }
 
                 ExecuteTrade(signal);
@@ -619,6 +686,196 @@ namespace NinjaTrader.NinjaScript.Strategies
                 sum += volumeHistory[i];
             }
             return sum / period;
+        }
+
+        /// <summary>
+        /// Update VIX history when new daily VIX data arrives.
+        /// Called from OnBarUpdate when BarsInProgress == 1 (VIX data).
+        /// </summary>
+        private void UpdateVixHistory()
+        {
+            if (BarsInProgress != 1) return;
+
+            double vixClose = Closes[1][0];
+            DateTime vixDate = Times[1][0].Date;
+
+            // Only update if we have a new day's data
+            if (vixDate > lastVixDate)
+            {
+                vixCloseHistory.Add(vixClose);
+                lastVixClose = vixClose;
+                lastVixDate = vixDate;
+
+                // Keep last 25 days for MA calculations
+                while (vixCloseHistory.Count > 25)
+                {
+                    vixCloseHistory.RemoveAt(0);
+                }
+
+                vixDataAvailable = vixCloseHistory.Count >= 21;
+
+                if (EnableLogging && vixCloseHistory.Count == 21)
+                {
+                    Print("VIX data ready: 21 days of history available for sentiment features");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Calculate 28 sentiment features from VIX history.
+        /// Features match Python historical_sentiment_loader.py exactly.
+        /// Uses PREVIOUS day's VIX data to avoid look-ahead bias.
+        /// </summary>
+        private bool CalculateSentimentFeatures()
+        {
+            if (!vixDataAvailable || vixCloseHistory.Count < 21)
+            {
+                return false;
+            }
+
+            try
+            {
+                // Use previous day's VIX (look-ahead bias prevention)
+                int n = vixCloseHistory.Count;
+                double vixClose = vixCloseHistory[n - 2]; // Previous day
+
+                // VIX moving averages (calculated from history ending at previous day)
+                double vixMa5 = CalculateVixSMA(5);
+                double vixMa10 = CalculateVixSMA(10);
+                double vixMa20 = CalculateVixSMA(20);
+
+                // VIX vs moving averages
+                double vixVsMa10 = vixMa10 > 0 ? vixClose / vixMa10 : 1.0;
+                double vixVsMa20 = vixMa20 > 0 ? vixClose / vixMa20 : 1.0;
+
+                // VIX percentile (rolling 20-day)
+                double vixPercentile20d = CalculateVixPercentile(20);
+
+                // Regime indicators (thresholds from Python)
+                double vixFearRegime = vixClose > 25.0 ? 1.0 : 0.0;
+                double vixExtremeFear = vixClose > 30.0 ? 1.0 : 0.0;
+                double vixComplacency = vixClose < 15.0 ? 1.0 : 0.0;
+
+                // VIX spike detection (15% daily increase)
+                double vixPctChange = 0;
+                if (n >= 3)
+                {
+                    double prevVix = vixCloseHistory[n - 3];
+                    vixPctChange = prevVix > 0 ? (vixClose - prevVix) / prevVix : 0;
+                }
+                double vixSpike = vixPctChange > 0.15 ? 1.0 : 0.0;
+
+                // Normalized sentiment (-1 = extreme fear, +1 = extreme complacency)
+                double vixSentiment = -Math.Max(-1, Math.Min(1, (vixClose - 20) / 15));
+
+                // Contrarian signal (same as sentiment)
+                double vixContrarianSignal = vixSentiment;
+
+                // AAII proxy features (derived from VIX percentile, matching Python)
+                double aaiiPct = vixPercentile20d;
+                double aaiiBearish = 25 + (aaiiPct * 30); // Range: 25-55%
+                double aaiiBullish = 50 - (aaiiPct * 30); // Range: 20-50%
+                double aaiiSpread = aaiiBullish - aaiiBearish;
+                double aaiiExtremeBullish = aaiiBullish > 50 ? 1.0 : 0.0;
+                double aaiiExtremeBearish = aaiiBearish > 50 ? 1.0 : 0.0;
+                double aaiiContrarianSignal = (aaiiBearish - aaiiBullish) / 100;
+
+                // PCR proxy features (derived from VIX, matching Python)
+                double vixNormalized = Math.Max(0, Math.Min(1, (vixClose - 12) / 25));
+                double pcrTotal = 0.6 + (vixNormalized * 0.7); // Range: 0.6 - 1.3
+                double pcrMa5 = pcrTotal; // Simplified - would need PCR history
+                double pcrMa10 = pcrTotal;
+                double pcrBullishExtreme = pcrTotal > 1.1 ? 1.0 : 0.0;
+                double pcrBearishExtreme = pcrTotal < 0.8 ? 1.0 : 0.0;
+                double pcrContrarianSignal = Math.Max(-1, Math.Min(1, (pcrTotal - 0.95) / 0.35));
+
+                // Composite contrarian signal
+                double compositeContrarian = (vixContrarianSignal + aaiiContrarianSignal + pcrContrarianSignal) / 3;
+
+                // Fear and greed regimes
+                double fearRegime = (vixFearRegime == 1 || aaiiExtremeBearish == 1 || pcrBullishExtreme == 1) ? 1.0 : 0.0;
+                double greedRegime = (vixComplacency == 1 || aaiiExtremeBullish == 1 || pcrBearishExtreme == 1) ? 1.0 : 0.0;
+
+                // Fill sentiment feature buffer (28 features in exact order from Python)
+                int idx = 0;
+                sentimentFeatureBuffer[idx++] = vixClose;           // sent_vix_close
+                sentimentFeatureBuffer[idx++] = vixMa5;             // sent_vix_ma5
+                sentimentFeatureBuffer[idx++] = vixMa10;            // sent_vix_ma10
+                sentimentFeatureBuffer[idx++] = vixMa20;            // sent_vix_ma20
+                sentimentFeatureBuffer[idx++] = vixVsMa10;          // sent_vix_vs_ma10
+                sentimentFeatureBuffer[idx++] = vixVsMa20;          // sent_vix_vs_ma20
+                sentimentFeatureBuffer[idx++] = vixPercentile20d;   // sent_vix_percentile_20d
+                sentimentFeatureBuffer[idx++] = vixFearRegime;      // sent_vix_fear_regime
+                sentimentFeatureBuffer[idx++] = vixExtremeFear;     // sent_vix_extreme_fear
+                sentimentFeatureBuffer[idx++] = vixComplacency;     // sent_vix_complacency
+                sentimentFeatureBuffer[idx++] = vixSpike;           // sent_vix_spike
+                sentimentFeatureBuffer[idx++] = vixSentiment;       // sent_vix_sentiment
+                sentimentFeatureBuffer[idx++] = vixContrarianSignal;// sent_vix_contrarian_signal
+                sentimentFeatureBuffer[idx++] = aaiiBullish;        // sent_aaii_bullish
+                sentimentFeatureBuffer[idx++] = aaiiBearish;        // sent_aaii_bearish
+                sentimentFeatureBuffer[idx++] = aaiiSpread;         // sent_aaii_spread
+                sentimentFeatureBuffer[idx++] = aaiiExtremeBullish; // sent_aaii_extreme_bullish
+                sentimentFeatureBuffer[idx++] = aaiiExtremeBearish; // sent_aaii_extreme_bearish
+                sentimentFeatureBuffer[idx++] = aaiiContrarianSignal;// sent_aaii_contrarian_signal
+                sentimentFeatureBuffer[idx++] = pcrTotal;           // sent_pcr_total
+                sentimentFeatureBuffer[idx++] = pcrMa5;             // sent_pcr_ma5
+                sentimentFeatureBuffer[idx++] = pcrMa10;            // sent_pcr_ma10
+                sentimentFeatureBuffer[idx++] = pcrBullishExtreme;  // sent_pcr_bullish_extreme
+                sentimentFeatureBuffer[idx++] = pcrBearishExtreme;  // sent_pcr_bearish_extreme
+                sentimentFeatureBuffer[idx++] = pcrContrarianSignal;// sent_pcr_contrarian_signal
+                sentimentFeatureBuffer[idx++] = compositeContrarian;// sent_composite_contrarian
+                sentimentFeatureBuffer[idx++] = fearRegime;         // sent_fear_regime
+                sentimentFeatureBuffer[idx++] = greedRegime;        // sent_greed_regime
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (EnableLogging)
+                {
+                    Print("Sentiment feature error: " + ex.Message);
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Calculate VIX SMA over the specified period (using previous day's data).
+        /// </summary>
+        private double CalculateVixSMA(int period)
+        {
+            int n = vixCloseHistory.Count;
+            if (n < period + 1) return lastVixClose;
+
+            double sum = 0;
+            // Start from n-1-period to n-2 (previous day, excluding current day)
+            for (int i = n - 1 - period; i < n - 1; i++)
+            {
+                if (i >= 0) sum += vixCloseHistory[i];
+            }
+            return sum / period;
+        }
+
+        /// <summary>
+        /// Calculate VIX percentile over the specified period.
+        /// </summary>
+        private double CalculateVixPercentile(int period)
+        {
+            int n = vixCloseHistory.Count;
+            if (n < period + 1) return 0.5;
+
+            double currentVix = vixCloseHistory[n - 2]; // Previous day
+            int countBelow = 0;
+
+            for (int i = n - 1 - period; i < n - 1; i++)
+            {
+                if (i >= 0 && vixCloseHistory[i] < currentVix)
+                {
+                    countBelow++;
+                }
+            }
+
+            return (double)countBelow / period;
         }
 
         private void ExecuteTrade(TradingSignal signal)

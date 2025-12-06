@@ -65,6 +65,7 @@ namespace SKIENinjaML
     public class StrategyConfig
     {
         public double min_vol_expansion_prob { get; set; }
+        public double min_sentiment_vol_prob { get; set; }
         public double min_breakout_prob { get; set; }
         public double tp_atr_mult_base { get; set; }
         public double sl_atr_mult_base { get; set; }
@@ -73,10 +74,12 @@ namespace SKIENinjaML
         public int base_contracts { get; set; }
         public int max_contracts { get; set; }
         public double vol_sizing_factor { get; set; }
+        public string ensemble_mode { get; set; }
 
         public StrategyConfig()
         {
             min_vol_expansion_prob = 0.50;
+            min_sentiment_vol_prob = 0.55;
             min_breakout_prob = 0.50;
             tp_atr_mult_base = 2.0;
             sl_atr_mult_base = 1.0;
@@ -85,6 +88,7 @@ namespace SKIENinjaML
             base_contracts = 1;
             max_contracts = 3;
             vol_sizing_factor = 1.0;
+            ensemble_mode = "agreement";
         }
     }
 
@@ -99,6 +103,7 @@ namespace SKIENinjaML
         public double TakeProfitOffset { get; set; }
         public double StopLossOffset { get; set; }
         public double VolExpansionProb { get; set; }
+        public double SentimentVolProb { get; set; }
         public double BreakoutProb { get; set; }
         public double PredictedATR { get; set; }
     }
