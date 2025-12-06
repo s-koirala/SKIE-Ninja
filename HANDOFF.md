@@ -155,9 +155,24 @@ python src/python/retrain_onnx_models.py --copy-to-ninjatrader
 
 | Task | Status | Priority |
 |------|--------|----------|
-| Validate with fresh ONNX models | Pending | HIGH |
-| Set up automated weekly retraining | Pending | MEDIUM |
-| Document NinjaTrader installation | Pending | MEDIUM |
+| Validate with fresh ONNX models | ✅ Complete | HIGH |
+| Set up automated weekly retraining | ✅ Complete | MEDIUM |
+| Document NinjaTrader installation | ✅ Complete | MEDIUM |
+| Paper trading validation | Pending | HIGH |
+
+#### Automated Retraining Setup
+
+Scripts created in `scripts/` folder:
+- `weekly_retrain.bat` - Batch script for retraining
+- `setup_weekly_task.ps1` - PowerShell script to create Windows Task Scheduler task
+
+**To enable automated weekly retraining:**
+```powershell
+# Run as Administrator
+.\scripts\setup_weekly_task.ps1
+```
+
+This creates a scheduled task that runs every Sunday at 6:00 PM.
 
 ---
 
