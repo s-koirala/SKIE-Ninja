@@ -1,7 +1,8 @@
 # SKIE_Ninja Project Handoff Document
 
-**Date**: 2025-12-05
+**Date**: 2025-12-06
 **Purpose**: Complete context for continuing development on new machine
+**Last Updated**: Phase 14 NinjaTrader Integration - Critical findings on ONNX deployment
 
 ---
 
@@ -88,13 +89,121 @@ Monte Carlo tests performed (10,000 iterations each):
 
 ---
 
-## NEXT STEPS
+## CURRENT PHASE - IN PROGRESS
 
-### 1. NinjaTrader Integration (PRIORITY)
-Export models to ONNX format for NinjaTrader 8 deployment.
+### Phase 14: NinjaTrader Integration (IN PROGRESS - 2025-12-06)
 
-### 2. Paper Trading Validation
-Deploy ensemble strategy in paper trading environment for live validation.
+**Objective**: Deploy validated models to NinjaTrader 8 for live execution
+
+#### Completed Tasks
+
+| Task | Status | Files |
+|------|--------|-------|
+| 1. ONNX Export | ✅ Complete | `src/python/export_onnx.py` |
+| 2. C# Predictor DLL | ✅ Complete | `src/csharp/SKIENinjaML/SKIENinjaPredictor.cs` |
+| 3. NinjaScript Strategy | ✅ Complete | `src/csharp/SKIENinjaStrategy.cs` |
+| 4. Feature Calculation | ✅ Fixed | ATR (SMA vs Wilder), RV (sample std dev) |
+| 5. ONNX Output Parsing | ✅ Fixed | LightGBM seq(map) format handling |
+| 6. Periodic Retraining | ✅ Complete | `src/python/retrain_onnx_models.py` |
+
+#### Critical Finding: Static ONNX vs Walk-Forward
+
+**Problem Identified**: Initial NinjaTrader backtest showed **-$194,512 loss** vs Python's **+$502,219 profit**.
+
+**Root Cause**:
+- Python backtests use **walk-forward validation** with retraining every 5 days (61 folds)
+- ONNX deployment uses **static models** trained once on 180 days
+
+| Methodology | Retraining | Python Result | NT8 Result |
+|-------------|------------|---------------|------------|
+| Walk-Forward | Every 5 days | +$502,219 | N/A |
+| Static ONNX | Never | N/A | -$194,512 |
+
+**Solution**: Implement periodic ONNX retraining to approximate walk-forward methodology.
+
+#### Technical Fixes Applied
+
+1. **ATR Calculation** - Changed from NinjaTrader's Wilder smoothing to SMA (matching Python)
+2. **Realized Volatility** - Changed from population std dev (n) to sample std dev (n-1)
+3. **ONNX Output Parsing** - Fixed handling of LightGBM's nested DisposableList output format
+4. **SetProfitTarget/SetStopLoss Order** - Must be called BEFORE entry per NT8 docs
+
+#### Files Created/Modified
+
+| File | Purpose |
+|------|---------|
+| `src/csharp/SKIENinjaML/SKIENinjaPredictor.cs` | ONNX inference DLL |
+| `src/csharp/SKIENinjaStrategy.cs` | NinjaTrader strategy |
+| `src/python/export_onnx.py` | ONNX model export |
+| `src/python/retrain_onnx_models.py` | **NEW** - Periodic retraining script |
+| `src/python/diagnose_onnx.py` | ONNX debugging tool |
+| `data/models/onnx/*.onnx` | Exported model files |
+| `data/models/onnx/scaler_params.json` | Feature normalization params |
+| `data/models/onnx/strategy_config.json` | Optimized thresholds |
+
+#### Recommended Workflow for Production
+
+```bash
+# Retrain models weekly (matches 5-day test window methodology)
+python src/python/retrain_onnx_models.py --copy-to-ninjatrader
+
+# Models valid for ~5 trading days
+# Repeat weekly to maintain walk-forward equivalent performance
+```
+
+#### Remaining Tasks
+
+| Task | Status | Priority |
+|------|--------|----------|
+| Validate with fresh ONNX models | Pending | HIGH |
+| Set up automated weekly retraining | Pending | MEDIUM |
+| Document NinjaTrader installation | Pending | MEDIUM |
+
+---
+
+## NEXT STEPS - ACTION PLAN
+
+### Phase 15: Paper Trading Validation (PRIORITY 2)
+
+**Objective**: Validate live execution matches backtest expectations
+
+| Metric | Backtest | Target (Paper) | Tolerance |
+|--------|----------|----------------|-----------|
+| Win Rate | 40.4% | 38-43% | ±3% |
+| Avg Trade | $26.30 | $20-30 | ±25% |
+| Sharpe | 3.09 | 2.5-3.5 | ±15% |
+| Daily Trades | ~15 | 12-18 | ±20% |
+
+**Duration**: 30-60 trading days minimum
+
+**Success Criteria**:
+- Metrics within tolerance bands
+- No execution errors
+- Slippage matches assumptions ($0.125/tick)
+
+### Phase 16: Live Trading (PRIORITY 3)
+
+**Prerequisites**:
+- Paper trading validation PASSED
+- VPS infrastructure ready
+- Risk management implemented
+
+**Scaling Plan**:
+1. Start with 1 contract
+2. Scale based on performance (Kelly criterion)
+3. Max position: TBD based on account size
+
+### Maintenance & Monitoring
+
+| Task | Frequency | Description |
+|------|-----------|-------------|
+| **ONNX Model Retrain** | **Weekly** | Run `retrain_onnx_models.py` (CRITICAL for walk-forward equivalent) |
+| Performance Review | Weekly | Compare to backtest expectations |
+| Feature Drift Check | Monthly | Validate feature distributions |
+| Risk Review | Daily | Max drawdown, position limits |
+| Full Model Retrain | Quarterly | Complete retraining with expanded dataset |
+
+**CRITICAL**: ONNX models are static and decay rapidly. Per project methodology (180-day train, 5-day test), models should be retrained **weekly** to approximate walk-forward performance.
 
 ---
 
@@ -104,11 +213,23 @@ Deploy ensemble strategy in paper trading environment for live validation.
 | File | Purpose |
 |------|---------|
 | `src/python/strategy/volatility_breakout_strategy.py` | **MAIN STRATEGY** |
+| `src/python/strategy/ensemble_strategy.py` | **PRODUCTION STRATEGY** (recommended) |
 | `src/python/feature_engineering/multi_target_labels.py` | Target generation (73 targets) |
 | `src/python/run_oos_backtest.py` | OOS validation script |
 | `src/python/run_2025_forward_test.py` | Forward test script |
 | `src/python/run_threshold_optimization.py` | Parameter optimization |
 | `src/python/run_qc_check.py` | Quality control validation |
+
+### NinjaTrader Integration Files (NEW - Phase 14)
+| File | Purpose |
+|------|---------|
+| `src/python/export_onnx.py` | Export LightGBM models to ONNX |
+| `src/python/retrain_onnx_models.py` | **Weekly retraining script** |
+| `src/python/diagnose_onnx.py` | ONNX model debugging |
+| `src/csharp/SKIENinjaML/SKIENinjaPredictor.cs` | C# ONNX inference DLL |
+| `src/csharp/SKIENinjaStrategy.cs` | NinjaTrader 8 strategy |
+| `data/models/onnx/` | ONNX models + config files |
+| `docs/NINJATRADER_INSTALLATION.md` | NT8 setup guide |
 
 ### Enhanced Feature Modules (NEW)
 | File | Purpose |
