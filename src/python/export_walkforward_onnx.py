@@ -274,12 +274,17 @@ class WalkForwardONNXExporter:
             json.dump(scaler_params, f, indent=2)
 
         # Export strategy config with optimized thresholds
+        # NOTE: Keys must match C# StrategyConfig property names exactly
         strategy_config = {
             'min_vol_expansion_prob': 0.40,
             'min_breakout_prob': 0.45,
-            'atr_multiplier_tp': 2.0,
-            'atr_multiplier_sl': 1.5,
+            'tp_atr_mult_base': 2.5,           # Optimized (Phase 12)
+            'sl_atr_mult_base': 1.25,          # Optimized (Phase 12)
+            'tp_adjustment_factor': 0.25,
             'max_holding_bars': 20,
+            'base_contracts': 1,
+            'max_contracts': 3,
+            'vol_sizing_factor': 1.0,
             'fold_info': {
                 'train_start': fold_info['train_start'].isoformat(),
                 'train_end': fold_info['train_end'].isoformat(),

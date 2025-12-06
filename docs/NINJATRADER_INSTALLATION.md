@@ -1,7 +1,38 @@
 # SKIE_Ninja NinjaTrader 8 Installation Guide
 
 **Last Updated**: 2025-12-06
-**Version**: 1.1 - Added critical retraining requirements
+**Version**: 1.2 - Added VIX sentiment integration requirements
+
+---
+
+## CRITICAL: Ensemble Strategy Requirements
+
+The Python backtests use an **Ensemble Strategy** that requires BOTH:
+
+1. **Technical Volatility Model** (vol_expansion_prob >= 0.40)
+2. **VIX Sentiment Model** (sent_vol_prob >= 0.55)
+
+### Why This Matters
+
+| Implementation | Filters | 2024 Trades | 2024 P&L |
+|----------------|---------|-------------|----------|
+| Python Ensemble | Tech + Sentiment | 2,044 | +$88,164 |
+| C# without VIX | Tech only | 5,956 | -$38,250 |
+
+**Missing the sentiment filter results in 3x overtrading and losses.**
+
+### Required Data
+
+- ES E-mini futures (5-minute bars)
+- **VIX Index data** (daily or intraday)
+
+### VIX Data Sources in NinjaTrader
+
+| Symbol | Provider | Notes |
+|--------|----------|-------|
+| ^VIX | Kinetick (free) | Delayed 15 min |
+| $VIX.X | CQG/Continuum | Real-time |
+| VIX | Interactive Brokers | Real-time |
 
 ---
 

@@ -21,13 +21,42 @@ namespace SKIENinjaML
 {
     /// <summary>
     /// Scaler parameters for feature normalization.
+    /// Handles both singular (mean/scale) and plural (means/scales) JSON keys.
     /// </summary>
     public class ScalerParams
     {
         public List<string> feature_names { get; set; }
+
+        // Support both naming conventions from different export scripts
+        [JsonProperty("mean")]
         public List<double> mean { get; set; }
+
+        [JsonProperty("means")]
+        public List<double> means { get; set; }
+
+        [JsonProperty("scale")]
         public List<double> scale { get; set; }
+
+        [JsonProperty("scales")]
+        public List<double> scales { get; set; }
+
         public int n_features { get; set; }
+
+        /// <summary>
+        /// Get mean values, handling both naming conventions.
+        /// </summary>
+        public List<double> GetMeans()
+        {
+            return mean ?? means ?? new List<double>();
+        }
+
+        /// <summary>
+        /// Get scale values, handling both naming conventions.
+        /// </summary>
+        public List<double> GetScales()
+        {
+            return scale ?? scales ?? new List<double>();
+        }
     }
 
     /// <summary>
@@ -142,10 +171,13 @@ namespace SKIENinjaML
         /// </summary>
         private float[] ScaleFeatures(double[] features)
         {
+            List<double> meanValues = _scalerParams.GetMeans();
+            List<double> scaleValues = _scalerParams.GetScales();
+
             float[] scaled = new float[features.Length];
             for (int i = 0; i < features.Length; i++)
             {
-                scaled[i] = (float)((features[i] - _scalerParams.mean[i]) / _scalerParams.scale[i]);
+                scaled[i] = (float)((features[i] - meanValues[i]) / scaleValues[i]);
             }
             return scaled;
         }

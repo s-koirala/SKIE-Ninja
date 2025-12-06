@@ -15,9 +15,36 @@ After research, selected ONNX Runtime for NinjaTrader integration:
 - Sub-millisecond inference latency
 - No external Python process needed
 
-### Critical Finding: Static ONNX vs Walk-Forward (2025-12-06)
+### Critical Finding 1: Static ONNX vs Walk-Forward (2025-12-06)
 
 **Problem**: Initial NinjaTrader backtest showed **-$194,512 loss** vs Python's **+$502,219 profit**.
+
+### Critical Finding 2: Missing VIX Sentiment Filter (2025-12-06)
+
+**Problem**: Walk-forward NT8 backtest showed **5,956 trades** vs Python's **2,044 trades** (2.9x more!).
+
+**Root Cause**: Python Ensemble uses TWO volatility filters, C# only uses ONE:
+
+```python
+# PYTHON ENSEMBLE (ensemble_strategy.py)
+vol_signal = (
+    tech_vol_prob >= 0.40 AND    # Technical volatility
+    sent_vol_prob >= 0.55        # VIX Sentiment volatility ← MISSING IN C#
+)
+```
+
+| Platform | Vol Filters | 2024 Trades | 2024 P&L |
+|----------|-------------|-------------|----------|
+| Python Ensemble | Technical + Sentiment | 2,044 | +$88,164 |
+| C# (missing filter) | Technical only | 5,956 | -$38,250 |
+
+**Solution**: Add VIX sentiment model to C# strategy for full feature parity.
+
+**Implementation**:
+1. Export sentiment_vol_model to ONNX for each walk-forward fold
+2. Add VIX data subscription in NT8 strategy
+3. Calculate sentiment features from VIX in C#
+4. Apply ensemble 'agreement' mode (both filters must pass)
 
 **Root Cause Analysis**:
 

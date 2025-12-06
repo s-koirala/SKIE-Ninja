@@ -106,7 +106,7 @@ Monte Carlo tests performed (10,000 iterations each):
 | 5. ONNX Output Parsing | ✅ Fixed | LightGBM seq(map) format handling |
 | 6. Periodic Retraining | ✅ Complete | `src/python/retrain_onnx_models.py` |
 
-#### Critical Finding: Static ONNX vs Walk-Forward
+#### Critical Finding 1: Static ONNX vs Walk-Forward
 
 **Problem Identified**: Initial NinjaTrader backtest showed **-$194,512 loss** vs Python's **+$502,219 profit**.
 
@@ -119,7 +119,82 @@ Monte Carlo tests performed (10,000 iterations each):
 | Walk-Forward | Every 5 days | +$502,219 | N/A |
 | Static ONNX | Never | N/A | -$194,512 |
 
-**Solution**: Implement periodic ONNX retraining to approximate walk-forward methodology.
+**Solution**: Walk-forward model switching implemented in NT8.
+
+---
+
+#### Critical Finding 2: Missing Sentiment Filter (2025-12-06)
+
+**Problem Identified**: Walk-forward NT8 backtest showed **5956 trades** vs Python's **2044 trades** (2.9x more!).
+
+**Root Cause**: Python Ensemble uses TWO volatility filters, C# only uses ONE:
+
+```python
+# PYTHON ENSEMBLE (ensemble_strategy.py lines 353-358)
+vol_signal = (
+    tech_vol_prob >= 0.40 AND    # Technical volatility model
+    sent_vol_prob >= 0.55        # VIX Sentiment volatility model ← MISSING IN C#
+)
+```
+
+```csharp
+// C# STRATEGY (WalkForwardPredictor.cs)
+if (volProb >= 0.40)  // Only technical - NO sentiment filter!
+```
+
+| Platform | Vol Filters | 2024 Trades | 2024 P&L |
+|----------|-------------|-------------|----------|
+| Python Ensemble | Technical + Sentiment | 2,044 | +$88,164 |
+| C# (missing filter) | Technical only | 5,956 | -$38,250 |
+
+**Solution Required**: Add VIX sentiment model to C# strategy for feature parity.
+
+**Implementation Plan**:
+1. Export sentiment_vol_model to ONNX alongside technical models
+2. Add VIX data subscription in NT8 strategy
+3. Calculate sentiment features from VIX in C#
+4. Apply both filters in signal generation (ensemble 'agreement' mode)
+
+---
+
+#### Walk-Forward NT8 Integration
+
+**Solution**: Two approaches implemented:
+
+1. **Weekly Retraining** (Manual): Run `retrain_onnx_models.py` weekly to keep static models fresh
+2. **Walk-Forward Backtest** (NEW): Automatic model switching in NT8 for true walk-forward simulation
+
+#### Walk-Forward NT8 Integration (NEW - 2025-12-06)
+
+Created a complete walk-forward backtesting system for NinjaTrader 8:
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Walk-Forward ONNX Export | `src/python/export_walkforward_onnx.py` | Generates 70 model sets for 2024 |
+| Walk-Forward Predictor | `src/csharp/SKIENinjaML/WalkForwardPredictor.cs` | Auto-switches models by date |
+| Walk-Forward Strategy | `src/csharp/SKIENinjaWalkForwardStrategy.cs` | NT8 strategy with walk-forward mode |
+| Model Schedule | `data/models/walkforward_onnx/model_schedule.csv` | Date ranges for each fold |
+
+**How it works:**
+1. Pre-generate 70 ONNX model sets (one per 5-day test period)
+2. Each model is trained on the prior 180 days
+3. NT8 strategy automatically loads correct model based on current bar date
+4. Run a SINGLE backtest covering 2024 - models switch automatically
+
+**Usage:**
+```powershell
+# Step 1: Generate walk-forward models (run once)
+python src/python/export_walkforward_onnx.py --start 2024-01-01
+
+# Step 2: Copy walkforward_onnx folder to Documents\SKIE_Ninja\walkforward_models
+
+# Step 3: In NT8, use SKIENinjaWalkForwardStrategy with:
+#   - WalkForwardMode = true
+#   - WalkForwardPath = path to walkforward_models folder
+#   - Run backtest from 2024-01-01 to 2024-12-15
+
+# Expected: Performance matching Python walk-forward (+$502K)
+```
 
 #### Technical Fixes Applied
 
@@ -133,13 +208,15 @@ Monte Carlo tests performed (10,000 iterations each):
 | File | Purpose |
 |------|---------|
 | `src/csharp/SKIENinjaML/SKIENinjaPredictor.cs` | ONNX inference DLL |
-| `src/csharp/SKIENinjaStrategy.cs` | NinjaTrader strategy |
-| `src/python/export_onnx.py` | ONNX model export |
-| `src/python/retrain_onnx_models.py` | **NEW** - Periodic retraining script |
+| `src/csharp/SKIENinjaML/WalkForwardPredictor.cs` | **NEW** - Auto model-switching predictor |
+| `src/csharp/SKIENinjaStrategy.cs` | NinjaTrader static strategy |
+| `src/csharp/SKIENinjaWalkForwardStrategy.cs` | **NEW** - Walk-forward enabled strategy |
+| `src/python/export_onnx.py` | Single ONNX model export |
+| `src/python/export_walkforward_onnx.py` | **NEW** - Walk-forward model generator |
+| `src/python/retrain_onnx_models.py` | Periodic retraining script |
 | `src/python/diagnose_onnx.py` | ONNX debugging tool |
-| `data/models/onnx/*.onnx` | Exported model files |
-| `data/models/onnx/scaler_params.json` | Feature normalization params |
-| `data/models/onnx/strategy_config.json` | Optimized thresholds |
+| `data/models/onnx/*.onnx` | Static model files |
+| `data/models/walkforward_onnx/` | **NEW** - 70 walk-forward model sets |
 
 #### Recommended Workflow for Production
 
