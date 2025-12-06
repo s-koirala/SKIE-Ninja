@@ -288,7 +288,9 @@ class ONNXExporter:
                 # LightGBM classifier outputs: label, probabilities (as list of dicts)
                 logger.info(f"  {model_name}: OK (outputs: {len(outputs)})")
             else:
-                logger.info(f"  {model_name}: OK (output: {outputs[0][0]:.4f})")
+                # Regressor outputs a numpy array - extract scalar value
+                output_value = float(outputs[0].flatten()[0])
+                logger.info(f"  {model_name}: OK (output: {output_value:.4f})")
 
         logger.info("All models validated successfully!")
 

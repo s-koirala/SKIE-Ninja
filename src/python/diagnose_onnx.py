@@ -176,7 +176,7 @@ def run_full_prediction(scaled_features):
     vol_prob = vol_out[1][0].get(1, 0.0) if isinstance(vol_out[1][0], dict) else 0.0
     high_prob = high_out[1][0].get(1, 0.0) if isinstance(high_out[1][0], dict) else 0.0
     low_prob = low_out[1][0].get(1, 0.0) if isinstance(low_out[1][0], dict) else 0.0
-    atr_pred = atr_out[0][0]
+    atr_pred = float(atr_out[0].flatten()[0])
 
     print(f"\nPredictions:")
     print(f"  Vol expansion probability: {vol_prob:.4f}")
