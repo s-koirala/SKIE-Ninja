@@ -1,8 +1,9 @@
 # SKIE Ninja Deployment Infrastructure Guide
 
 **Created**: 2025-12-15
+**Updated**: 2025-12-15
 **Purpose**: Data-driven analysis of optimal brokerage, data feeds, and infrastructure for production deployment
-**Status**: Phase 15 Planning
+**Status**: Phase 15 - Active Implementation
 
 ---
 
@@ -11,6 +12,119 @@
 This document provides a comprehensive analysis of infrastructure requirements for deploying the SKIE Ninja ensemble strategy to live trading. Recommendations are based on 2024-2025 benchmark data, academic research, and industry best practices.
 
 **Key Recommendation**: AMP Futures or NinjaTrader Brokerage with Rithmic data feed, Kinetick CBOE add-on for VIX, and VPS co-location for optimal execution.
+
+**Implementation Approach**: Socket Bridge architecture for direct Python strategy execution with minimal latency.
+
+---
+
+## 0. NinjaTrader Integration Architecture (RECOMMENDED)
+
+### 0.1 Implementation Options Comparison
+
+| Approach | Development Time | Latency | Maintenance | Recommendation |
+|----------|------------------|---------|-------------|----------------|
+| **Socket Bridge** | 1-2 days | ~5-10ms | LOW | **RECOMMENDED** |
+| ONNX Export | 1-2 weeks | ~1ms | HIGH | Not recommended |
+| Python.NET | 3-5 days | ~20-50ms | MEDIUM | Alternative |
+| Full C# Port | 4-8 weeks | ~1ms | HIGH | Not recommended |
+
+**Rationale**: For 5-minute bars with ~20 bar hold time, the ~5-10ms Socket Bridge latency is negligible. This approach:
+- Preserves validated Python code exactly as tested
+- Eliminates feature parity risk (Python vs C# calculations)
+- Enables rapid iteration and debugging
+- Reduces deployment complexity
+
+### 0.2 Socket Bridge Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     NINJATRADER 8                                │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  SKIENinjaStrategy.cs (NinjaScript)                      │   │
+│  │  - Receives bar data from Rithmic                        │   │
+│  │  - Sends OHLCV + VIX to Python via TCP socket            │   │
+│  │  - Receives trade signals (LONG/SHORT/FLAT)              │   │
+│  │  - Executes orders via NinjaTrader order API             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ TCP Socket (localhost:5555)
+                              │ JSON messages, ~5ms round-trip
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    PYTHON SIGNAL SERVER                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  ninja_signal_server.py                                   │   │
+│  │  - Receives OHLCV data from NinjaTrader                  │   │
+│  │  - Maintains rolling feature window (200 bars)           │   │
+│  │  - Runs ensemble_strategy.py prediction                  │   │
+│  │  - Returns trade signal with TP/SL levels                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Trained Models (loaded at startup)                       │   │
+│  │  - vol_expansion_model.pkl                               │   │
+│  │  - breakout_model.pkl                                    │   │
+│  │  - atr_forecast_model.pkl                                │   │
+│  │  - sentiment_vol_model.pkl                               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 0.3 Message Protocol
+
+**Request (NinjaTrader → Python)**:
+```json
+{
+  "type": "BAR_UPDATE",
+  "timestamp": "2025-12-15T10:30:00",
+  "symbol": "ES 03-25",
+  "timeframe": "5min",
+  "open": 6050.25,
+  "high": 6052.50,
+  "low": 6049.00,
+  "close": 6051.75,
+  "volume": 12500,
+  "vix_close": 14.25,
+  "position": 0
+}
+```
+
+**Response (Python → NinjaTrader)**:
+```json
+{
+  "type": "SIGNAL",
+  "action": "LONG",
+  "confidence": 0.72,
+  "vol_expansion_prob": 0.65,
+  "breakout_prob": 0.58,
+  "tp_price": 6061.75,
+  "sl_price": 6046.50,
+  "contracts": 1,
+  "reason": "Vol expansion + bullish breakout"
+}
+```
+
+### 0.4 Exit Parameter Configuration
+
+**IMPORTANT**: Exit parameters are FRAGILE - do not re-optimize.
+
+| Parameter | Validated Value | Safe Range | DO NOT USE |
+|-----------|-----------------|------------|------------|
+| tp_atr_mult | 2.5 | 2.0 - 3.0 | < 2.0 (losses) |
+| sl_atr_mult | 1.25 | 1.0 - 1.5 | > 1.5 (losses) |
+| max_holding_bars | 20 | 15 - 25 | - |
+
+**Rationale**: Validation report showed TP/SL sensitivity can swing P&L by $3M+. Current values are in stable zone. Further optimization risks overfitting.
+
+### 0.5 File Locations
+
+| File | Purpose |
+|------|---------|
+| `src/ninjatrader/SKIENinjaStrategy.cs` | NinjaScript client strategy |
+| `src/python/deployment/ninja_signal_server.py` | Python signal server |
+| `src/python/deployment/feature_calculator.py` | Real-time feature calculation |
+| `models/production/*.pkl` | Trained model files |
 
 ---
 
@@ -196,34 +310,44 @@ aaii_bullish = 50 - (vix_pct * 30)  # Range: 20-50%
 
 ## 5. Implementation Checklist
 
-### Phase 15A: Infrastructure Setup
+### Phase 15A: Infrastructure Setup (COMPLETE if NinjaTrader account exists)
 
-- [ ] Select brokerage (NinjaTrader or AMP recommended)
+- [x] Select brokerage (NinjaTrader account exists)
 - [ ] Configure Rithmic data feed
 - [ ] Add Kinetick CBOE subscription for VIX
 - [ ] Enable multi-provider in NinjaTrader (Tools > Options > General)
-- [ ] Set up VPS with CME proximity (Chicago)
+- [ ] Set up VPS with CME proximity (Chicago) - *optional for paper trading*
 
-### Phase 15B: Data Integration
+### Phase 15B: Socket Bridge Implementation (1-2 days)
 
-- [ ] Implement real-time VIX data capture in NinjaScript
-- [ ] Configure T-1 feature calculation at market open
-- [ ] Validate VIX proxy vs actual PCR correlation
-- [ ] Set up Alpha Vantage news API (optional)
+- [ ] Create Python signal server (`ninja_signal_server.py`)
+- [ ] Export trained models to `models/production/` directory
+- [ ] Create NinjaScript client strategy (`SKIENinjaStrategy.cs`)
+- [ ] Test socket communication locally
+- [ ] Implement heartbeat/reconnection logic
 
-### Phase 15C: Model Deployment
+### Phase 15C: Platform Walk-Forward Validation (Critical)
 
-- [ ] Export LightGBM models to ONNX format
-- [ ] Create NinjaScript strategy wrapper
-- [ ] Implement feature calculation in C#
-- [ ] Validate feature parity (Python vs C#)
+- [ ] Run strategy through NinjaTrader Market Replay (2020-2022 data)
+- [ ] Compare trade-by-trade results vs Python backtest
+- [ ] Document any discrepancies >5%
+- [ ] Validate feature calculations match Python output
+- [ ] Measure simulated slippage vs 0.5 tick assumption
 
-### Phase 15D: Paper Trading
+### Phase 15D: Paper Trading (30-60 days)
 
-- [ ] Deploy to NinjaTrader simulation
-- [ ] Monitor for 30-60 days
-- [ ] Compare live fills vs backtest assumptions
-- [ ] Measure actual slippage vs 0.5 tick estimate
+- [ ] Deploy to NinjaTrader simulation account
+- [ ] Monitor daily P&L vs backtest benchmarks
+- [ ] Implement kill switch (halt if daily loss >$5K)
+- [ ] Track metrics: actual slippage, fill rate, latency
+- [ ] Weekly performance review
+
+### Phase 15E: Controlled Live Trading
+
+- [ ] Start with 1 MES contract (1/10th ES exposure)
+- [ ] Scale to 1 ES contract after 30 profitable days
+- [ ] Quarterly full validation re-run
+- [ ] Monthly parameter stability review
 
 ---
 

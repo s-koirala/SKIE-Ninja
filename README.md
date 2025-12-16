@@ -2,7 +2,7 @@
 
 A comprehensive algorithmic trading system leveraging machine learning, macroeconomic factors, and advanced quantitative strategies for futures trading on the NinjaTrader platform.
 
-## Project Status: Phase 14 - ENHANCED VALIDATION COMPLETE & PRODUCTION READY
+## Project Status: Phase 15 - PRODUCTION DEPLOYMENT IN PROGRESS
 
 **Ensemble Strategy (Vol Breakout + VIX Sentiment) - RECOMMENDED**
 
@@ -50,44 +50,73 @@ A comprehensive algorithmic trading system leveraging machine learning, macroeco
 2. **WHERE** price goes - Breakout high/low (AUC 0.72)
 3. **HOW MUCH** it moves - ATR forecast (R² 0.36)
 
+## NinjaTrader Deployment (Socket Bridge)
+
+### Architecture
+
+The validated Python strategy runs via TCP socket bridge - preserving code exactly as tested:
+
+```
+NinjaTrader 8 ←→ TCP Socket (localhost:5555) ←→ Python Signal Server
+```
+
+### Quick Deployment
+
+```bash
+# 1. Start Python signal server
+cd SKIE_Ninja
+python src/python/deployment/ninja_signal_server.py --port 5555 --mode paper
+
+# 2. Install NinjaScript strategy
+# Copy src/ninjatrader/SKIENinjaStrategy.cs to:
+# Documents\NinjaTrader 8\bin\Custom\Strategies\
+# In NinjaTrader: Right-click Strategies > Compile
+
+# 3. Apply strategy to ES 5-minute chart
+# Set Python Server Host: localhost
+# Set Python Server Port: 5555
+```
+
+### Why Socket Bridge (Not ONNX)?
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Code Integrity** | Preserves validated Python exactly as tested |
+| **No Feature Parity Risk** | Eliminates C# vs Python calculation drift |
+| **Rapid Iteration** | Change Python, restart server - no recompile |
+| **Acceptable Latency** | ~5-10ms negligible for 5-min bars |
+
+### Exit Parameters (DO NOT CHANGE)
+
+| Parameter | Value | Safe Range | Danger |
+|-----------|-------|------------|--------|
+| tp_atr_mult | 2.5 | 2.0-3.0 | <2.0 = losses |
+| sl_atr_mult | 1.25 | 1.0-1.5 | >1.5 = losses |
+
+---
+
 ## Repository Structure
 
 ```
 SKIE_Ninja/
 ├── src/
-│   └── python/
-│       ├── strategy/                    # Trading strategies
-│       │   ├── volatility_breakout_strategy.py   # Base strategy (validated)
-│       │   ├── ensemble_strategy.py              # PRODUCTION strategy (best)
-│       │   └── sentiment_strategy.py             # Sentiment-only (research)
-│       ├── data_collection/             # Data downloaders and loaders
-│       │   ├── databento_downloader.py          # Databento API integration
-│       │   ├── historical_sentiment_loader.py   # VIX sentiment data
-│       │   ├── established_sentiment_indices.py # AAII, PCR, VIX indices
-│       │   └── ...
-│       ├── feature_engineering/         # Feature calculation modules
-│       │   ├── multi_target_labels.py           # 73-target generator
-│       │   ├── multi_timeframe_features.py      # MTF analysis (15m, 1h, 4h)
-│       │   ├── enhanced_cross_market.py         # Cross-market features
-│       │   ├── social_news_sentiment.py         # Twitter/News/Reddit
-│       │   ├── enhanced_feature_pipeline.py     # Unified pipeline
-│       │   └── ...
-│       ├── models/                      # ML model training
-│       │   └── ...
-│       ├── backtesting/                 # Walk-forward backtesting
-│       │   └── ...
-│       ├── quality_control/             # Validation framework
-│       │   └── validation_framework.py
-│       ├── run_monte_carlo_simulation.py        # Monte Carlo validation
-│       ├── run_enhanced_monte_carlo.py          # Enhanced stress testing (NEW)
-│       ├── run_parameter_sensitivity.py         # Parameter sensitivity (NEW)
-│       ├── run_regime_analysis.py               # Regime-specific analysis (NEW)
-│       ├── run_qc_correlation_investigation.py  # Correlation QC (NEW)
-│       ├── run_ensemble_threshold_optimization.py # Parameter optimization
-│       ├── run_ensemble_oos_backtest.py         # OOS validation
-│       ├── run_ensemble_2025_forward_test.py    # Forward test
-│       ├── run_qc_check.py                      # QC validation
-│       └── run_enhanced_feature_qc.py           # Enhanced feature QC
+│   ├── python/
+│   │   ├── strategy/                    # Trading strategies
+│   │   │   ├── volatility_breakout_strategy.py   # Base strategy (validated)
+│   │   │   ├── ensemble_strategy.py              # PRODUCTION strategy (best)
+│   │   │   └── sentiment_strategy.py             # Sentiment-only (research)
+│   │   ├── deployment/                  # NinjaTrader integration (NEW)
+│   │   │   └── ninja_signal_server.py           # Python signal server
+│   │   ├── data_collection/             # Data downloaders and loaders
+│   │   ├── feature_engineering/         # Feature calculation modules
+│   │   ├── models/                      # ML model training
+│   │   ├── backtesting/                 # Walk-forward backtesting
+│   │   ├── quality_control/             # Validation framework
+│   │   └── run_*.py                     # Various run scripts
+│   └── ninjatrader/                     # NinjaScript strategies (NEW)
+│       └── SKIENinjaStrategy.cs                 # NinjaTrader client
+├── models/
+│   └── production/                      # Trained model files for deployment
 ├── data/
 │   ├── raw/market/                      # Downloaded market data
 │   ├── processed/                       # Feature rankings
@@ -170,6 +199,25 @@ If you see these, **STOP and investigate**:
 - Profit factor > 2.0 (ours is 1.28)
 - AUC > 0.85 for any directional prediction
 
+### Data-Driven Decision Framework
+
+All parameters are justified by data, not arbitrary selection:
+
+| Decision | Evidence | Overfitting Check |
+|----------|----------|-------------------|
+| Entry thresholds (0.40, 0.45) | 256-point grid search | OOS validation |
+| Exit multipliers (2.5, 1.25) | Grid search + sensitivity | Forward test |
+| Model selection (LightGBM) | Walk-forward CV | Consistent OOS |
+| Feature selection (75) | 4-method ranking | No leakage detected |
+
+**Overfitting Detection:**
+- IS-OOS AUC degradation: 6% (0.84→0.79) - ROBUST
+- IS-OOS Sharpe degradation: 31% (4.56→3.16) - ACCEPTABLE
+- Forward test consistency: 2.66 Sharpe - ROBUST
+- Year-over-year: 100% profitable (2020-2025) - ROBUST
+
+**Full methodology:** See `docs/DATA_DRIVEN_DECISIONS.md`
+
 ## Development Roadmap
 
 ### Completed Phases
@@ -187,14 +235,14 @@ If you see these, **STOP and investigate**:
 | Phase 13 | Monte Carlo Validation | **COMPLETE (100% prob profit)** |
 | Phase 14 | Enhanced Validation | **COMPLETE (4/5 stress tests passed)** |
 
-### Phase 15: Production Deployment (NEXT)
+### Phase 15: Production Deployment (IN PROGRESS)
 
+- [x] NinjaTrader account setup
+- [x] Socket Bridge architecture implementation
+- [ ] Platform walk-forward validation (Market Replay)
 - [ ] Paper trading validation (30-60 days)
-- [ ] NinjaTrader ONNX export
 - [ ] VPS setup and monitoring
-- [ ] Risk management implementation
-- [ ] Live slippage measurement
-- [ ] Scale based on performance
+- [ ] Controlled live trading (MES → ES)
 
 ## Trading Costs Used
 
@@ -292,5 +340,5 @@ Proprietary - All rights reserved
 
 ---
 
-*Last Updated: 2025-12-05*
+*Last Updated: 2025-12-15*
 *Maintained by: SKIE_Ninja Development Team*

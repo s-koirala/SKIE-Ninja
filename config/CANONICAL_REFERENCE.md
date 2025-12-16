@@ -1,7 +1,26 @@
 # SKIE_Ninja Canonical Reference
 
 **Created**: 2025-12-04
+**Updated**: 2025-12-15
 **Purpose**: Single source of truth for active files, models, and knowledge
+
+---
+
+## AUDIT FINDINGS (2025-12-15) - **ALL CRITICAL ISSUES FIXED**
+
+**A comprehensive audit was performed on 2025-12-15. All critical issues have been resolved.**
+**See `docs/AUDIT_REPORT.md` for full details.**
+
+### Socket Bridge Issues - ALL FIXED
+
+| Issue | Severity | File | Status |
+|-------|----------|------|--------|
+| VIX buffer lag (T-2 vs T-1) | CRITICAL | ninja_signal_server.py:175 | **FIXED** |
+| Feature count mismatch | CRITICAL | ninja_signal_server.py | **FIXED** |
+| VIX percentile broken in live | HIGH | ninja_signal_server.py:179-185 | **FIXED** |
+| No feature validation | HIGH | ninja_signal_server.py | **FIXED** |
+
+**✓ READY FOR PAPER TRADING** - All critical issues resolved (2025-12-15)
 
 ---
 
@@ -32,9 +51,12 @@
 | File | Purpose | Status |
 |------|---------|--------|
 | `src/python/strategy/volatility_breakout_strategy.py` | **MAIN STRATEGY** - Vol filter + breakout | **ACTIVE** |
+| `src/python/strategy/ensemble_strategy.py` | **PRODUCTION** - Ensemble (recommended) | **ACTIVE** |
 | `src/python/feature_engineering/multi_target_labels.py` | 73-target generator (vol, breakout, ATR) | **ACTIVE** |
-| `src/python/run_oos_backtest.py` | Out-of-sample validation script | **ACTIVE** |
-| `src/python/run_2025_forward_test.py` | Forward test on 2025 data | **ACTIVE** |
+| `src/python/run_oos_backtest.py` | Out-of-sample validation (baseline) | **ACTIVE** |
+| `src/python/run_ensemble_oos_backtest.py` | Out-of-sample validation (ensemble) | **ACTIVE** |
+| `src/python/run_2025_forward_test.py` | Forward test (baseline) | **ACTIVE** |
+| `src/python/run_ensemble_2025_forward_test.py` | Forward test (ensemble - use this) | **ACTIVE** |
 | `src/python/run_threshold_optimization.py` | Parameter grid search | **ACTIVE** |
 | `src/python/run_qc_check.py` | Quality control validation | **ACTIVE** |
 
@@ -44,23 +66,68 @@
 |------|---------|--------|
 | `feature_engineering/volatility_regime.py` | VIX + regime detection | **ACTIVE** |
 | `feature_engineering/triple_barrier.py` | Triple barrier labeling | **ACTIVE** |
-| `feature_engineering/multi_timeframe_features.py` | **NEW** MTF analysis (15m, 1h, 4h) | **ACTIVE** |
-| `feature_engineering/enhanced_cross_market.py` | **NEW** Real Databento cross-market | **ACTIVE** |
-| `feature_engineering/social_news_sentiment.py` | **NEW** Twitter/News/Reddit sentiment | **ACTIVE** |
-| `feature_engineering/enhanced_feature_pipeline.py` | **NEW** Unified feature pipeline | **ACTIVE** |
-| `run_enhanced_feature_qc.py` | **NEW** Enhanced QC validation | **ACTIVE** |
+| `feature_engineering/multi_timeframe_features.py` | MTF analysis (15m, 1h, 4h) | **ACTIVE** |
+| `feature_engineering/enhanced_cross_market.py` | Real Databento cross-market | **ACTIVE** |
+| `feature_engineering/social_news_sentiment.py` | Twitter/News/Reddit sentiment | **ACTIVE** |
+| `feature_engineering/enhanced_feature_pipeline.py` | Unified feature pipeline | **ACTIVE** |
+| `run_enhanced_feature_qc.py` | Enhanced QC validation | **ACTIVE** |
+
+### Shared Utilities (NEW - Phase C)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `feature_engineering/shared/technical_utils.py` | TR, ATR, RSI, BB, MACD | **NEW** ✓ |
+| `feature_engineering/shared/returns_utils.py` | Return calculations | **NEW** ✓ |
+| `feature_engineering/shared/volume_utils.py` | Volume features, VWAP | **NEW** ✓ |
+| `feature_engineering/shared/temporal_utils.py` | Time encoding | **NEW** ✓ |
+
+**Note:** Shared utilities consolidate 11+ duplicate TR, 10+ RSI, 6+ ATR implementations.
+
+### NinjaTrader Deployment (NEW - Phase 15)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/python/deployment/ninja_signal_server.py` | Python TCP signal server | **ACTIVE** ✓ |
+| `src/ninjatrader/SKIENinjaStrategy.cs` | NinjaScript client strategy | **ACTIVE** ✓ |
+| `docs/DEPLOYMENT_INFRASTRUCTURE.md` | Production deployment guide | **ACTIVE** |
+| `requirements.txt` | Python dependencies | **NEW** ✓ |
+
+**✓ Socket Bridge ready for paper trading** - All critical issues fixed (2025-12-15)
 
 ### Documentation (Active)
 
 | File | Purpose | Status |
 |------|---------|--------|
 | `HANDOFF.md` | **START HERE** - Next session handoff | **ACTIVE** |
+| `CHANGELOG.md` | **NEW** Version history and changes | **ACTIVE** |
 | `docs/BEST_PRACTICES.md` | Lessons learned & anti-patterns | **ACTIVE** |
+| `docs/AUDIT_REPORT.md` | Comprehensive audit findings | **ACTIVE** |
+| `docs/DATA_DRIVEN_DECISIONS.md` | Parameter justification & overfitting detection | **ACTIVE** |
+| `docs/VALIDATION_REPORT.md` | Stress testing & sensitivity analysis | **ACTIVE** |
 | `config/project_memory.md` | Project decision log | **ACTIVE** |
 | `config/CANONICAL_REFERENCE.md` | This file - canonical reference | **ACTIVE** |
 | `research/04_multi_target_prediction_strategy.md` | Multi-target strategy design | **ACTIVE** |
-| `research/05_sentiment_strategy_plan.md` | **NEW** Sentiment strategy & ensemble plan | **ACTIVE** |
+| `research/05_sentiment_strategy_plan.md` | Sentiment strategy & ensemble plan | **ACTIVE** |
 | `docs/methodology/BACKTEST_METHODOLOGY.md` | Backtest methodology | **ACTIVE** |
+
+### Quality Control & Testing (Phase 15)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/python/quality_control/overfitting_detection.py` | DSR, CSCV, PSR implementations | **ACTIVE** ✓ |
+| `src/python/run_overfitting_assessment.py` | Run comprehensive overfitting tests | **ACTIVE** ✓ |
+| `src/python/run_window_optimization.py` | Data-driven train/test window selection | **NEW** ✓ |
+| `src/python/run_embargo_analysis.py` | Autocorrelation-based embargo justification | **NEW** ✓ |
+| `tests/test_critical_functions.py` | Pytest suite for critical functions | **ACTIVE** ✓ |
+
+### Configuration (Updated)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `config/api_keys.py` | **SECURE** - Loads keys from environment | **UPDATED** ✓ |
+| `config/api_keys.env.template` | Template for API keys | **ACTIVE** |
+
+**API Key Security**: Copy `api_keys.env.template` to `api_keys.env` and fill in your keys. Never commit `api_keys.env`.
 
 ---
 
@@ -233,9 +300,9 @@ class StrategyConfig:
 | Profit Factor | 1.24 |
 | Sharpe Ratio | 2.66 |
 
-**Total Validated Edge Across All Periods: $763,125**
+**Vol Breakout Baseline Total: $763,125** (IS + OOS + Forward)
 
-### Ensemble Strategy Results (NEW)
+### Ensemble Strategy Results (PRODUCTION)
 
 The ensemble strategy combines vol breakout with VIX-based sentiment features using the "either" method (enter if either technical OR sentiment vol model predicts expansion).
 
@@ -243,8 +310,9 @@ The ensemble strategy combines vol breakout with VIX-based sentiment features us
 |--------|-------------|----------|-------------|
 | In-Sample (2023-24) | $209,351 | **$224,813** | **+7.4%** |
 | OOS (2020-22) | $496,380 | **$502,219** | **+1.2%** |
+| Forward (2025) | $57,394 | **$59,847** | **+4.3%** |
 
-**Ensemble Total Validated: $727,032** (vs $705,731 baseline - limited to same periods)
+**Ensemble Total Validated: $786,879** (recommended production strategy)
 
 ### Model Performance
 
@@ -378,5 +446,5 @@ python src/python/run_enhanced_feature_qc.py
 
 ---
 
-*Last Updated: 2025-12-05*
+*Last Updated: 2025-12-15*
 *Maintained by: SKIE_Ninja Development Team*

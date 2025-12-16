@@ -1,11 +1,29 @@
 # SKIE_Ninja Project Handoff Document
 
-**Date**: 2025-12-05
+**Date**: 2025-12-15 (Updated)
 **Purpose**: Complete context for continuing development on new machine
 
 ---
 
-## PROJECT STATUS: STATISTICALLY VALIDATED & PRODUCTION READY
+## AUDIT FINDINGS (2025-12-15) - **ALL CRITICAL ISSUES FIXED ✓**
+
+**A comprehensive audit was completed and all critical issues have been resolved.**
+
+| Issue | Severity | Status | Fix Applied |
+|-------|----------|--------|-------------|
+| VIX buffer lag (T-2 vs T-1) | CRITICAL | **FIXED** | Changed `[-2]` to `[-1]` |
+| Feature count mismatch | CRITICAL | **FIXED** | Added 28+ sentiment features |
+| VIX percentile broken | HIGH | **FIXED** | Uses historical VIX reference |
+| No feature validation | HIGH | **FIXED** | Added count/order validation |
+| P&L tracking bug | MEDIUM | **FIXED** | Use `GetProfitLoss()` |
+| Missing heartbeat | MEDIUM | **FIXED** | Added 30s heartbeat timer |
+| Missing requirements.txt | HIGH | **FIXED** | Created with pinned versions |
+
+**✓ READY FOR PAPER TRADING** - See `docs/AUDIT_REPORT.md` for full details
+
+---
+
+## PROJECT STATUS: PHASE 15 - PRODUCTION DEPLOYMENT IN PROGRESS
 
 ### Ensemble Strategy (RECOMMENDED - Best Performance)
 
@@ -90,11 +108,54 @@ Monte Carlo tests performed (10,000 iterations each):
 
 ## NEXT STEPS
 
-### 1. NinjaTrader Integration (PRIORITY)
-Export models to ONNX format for NinjaTrader 8 deployment.
+### Phase 15: Production Deployment (IN PROGRESS)
 
-### 2. Paper Trading Validation
-Deploy ensemble strategy in paper trading environment for live validation.
+#### 15A: Infrastructure (COMPLETE)
+- [x] NinjaTrader account established
+
+#### 15B: Socket Bridge Implementation (CURRENT)
+Deploy Python strategy directly via TCP socket bridge - preserves validated code exactly.
+
+```
+NinjaTrader 8 ←→ TCP Socket (localhost:5555) ←→ Python Signal Server
+```
+
+**Files to Create**:
+| File | Purpose |
+|------|---------|
+| `src/python/deployment/ninja_signal_server.py` | Python signal server |
+| `src/ninjatrader/SKIENinjaStrategy.cs` | NinjaScript client |
+
+**Why Socket Bridge over ONNX**:
+- Preserves validated Python code exactly as tested
+- Eliminates C# feature parity risk
+- ~5-10ms latency is negligible for 5-min bars
+- Faster to implement (1-2 days vs 1-2 weeks)
+
+#### 15C: Platform Walk-Forward Validation
+- Run through NinjaTrader Market Replay (2020-2022)
+- Compare trade-by-trade vs Python backtest
+- Document discrepancies >5%
+
+#### 15D: Paper Trading (30-60 days)
+- Deploy to simulation account
+- Monitor daily vs backtest benchmarks
+- Implement kill switch (daily loss >$5K)
+
+#### 15E: Controlled Live Trading
+- Start with 1 MES contract
+- Scale to ES after 30 profitable days
+
+### Exit Parameter Warning (DO NOT RE-OPTIMIZE)
+
+Exit parameters are **FRAGILE** - further optimization risks overfitting.
+
+| Parameter | Validated | Safe Range | Danger Zone |
+|-----------|-----------|------------|-------------|
+| tp_atr_mult | 2.5 | 2.0-3.0 | <2.0 (losses) |
+| sl_atr_mult | 1.25 | 1.0-1.5 | >1.5 (losses) |
+
+**Rationale**: Validation showed TP/SL sensitivity can swing P&L by $3M+. Current values in stable zone.
 
 ---
 
@@ -124,6 +185,7 @@ Deploy ensemble strategy in paper trading environment for live validation.
 |------|---------|
 | `config/CANONICAL_REFERENCE.md` | Single source of truth |
 | `config/project_memory.md` | Decision log & history |
+| `CHANGELOG.md` | **NEW** Version history and changes |
 | `docs/BEST_PRACTICES.md` | Lessons learned |
 | `docs/methodology/BACKTEST_METHODOLOGY.md` | Methodology reference |
 
@@ -298,14 +360,20 @@ features, validation = generate_enhanced_features(
 
 ## VALIDATION CHECKLIST
 
-### Phase 10-13 (All Complete)
+### Phase 10-14 (All Complete)
 - [x] Out-of-sample validation (2020-2022): PASSED
 - [x] Forward test (2025): PASSED
 - [x] QC checks: PASSED
 - [x] **Threshold optimization**: COMPLETE (+96% improvement)
 - [x] **Monte Carlo simulation**: COMPLETE (100% prob profit)
-- [ ] NinjaTrader ONNX export
-- [ ] Paper trading validation
+- [x] **Enhanced validation**: COMPLETE (Phase 14)
+
+### Phase 15 (In Progress)
+- [x] NinjaTrader account setup
+- [x] Socket Bridge implementation (**COMPLETE** - all critical issues fixed)
+- [ ] Platform walk-forward validation (Market Replay)
+- [ ] Paper trading validation (30-60 days)
+- [ ] Controlled live trading (MES → ES)
 
 ### Strategy Validation Summary
 | Strategy | Status | Recommendation |
@@ -322,6 +390,36 @@ features, validation = generate_enhanced_features(
 | `run_qc_check.py` | Data leakage detection |
 | `run_ensemble_2025_forward_test.py` | Forward test |
 | `run_ensemble_oos_backtest.py` | OOS validation |
+| `run_overfitting_assessment.py` | DSR + CSCV overfitting tests |
+| `run_window_optimization.py` | **NEW** Data-driven train/test window selection |
+| `run_embargo_analysis.py` | **NEW** Autocorrelation-based embargo justification |
+
+### Quality Control (Phase 15)
+| File | Purpose |
+|------|---------|
+| `quality_control/overfitting_detection.py` | DSR, CSCV, PSR implementations |
+| `tests/test_critical_functions.py` | Pytest suite for validation |
+
+### Shared Utilities (Phase C)
+| File | Purpose |
+|------|---------|
+| `feature_engineering/shared/technical_utils.py` | TR, ATR, RSI, Bollinger, MACD |
+| `feature_engineering/shared/returns_utils.py` | Return calculations |
+| `feature_engineering/shared/volume_utils.py` | Volume features, VWAP |
+| `feature_engineering/shared/temporal_utils.py` | Time encoding |
+
+**Note:** Shared utilities consolidate 11+ duplicate implementations across the codebase.
+
+### Configuration (Updated)
+| File | Purpose |
+|------|---------|
+| `config/api_keys.py` | **SECURE** - Loads keys from environment variables |
+| `config/api_keys.env.template` | Template for API keys (copy to api_keys.env) |
+
+**API Key Security**:
+- Copy `api_keys.env.template` to `api_keys.env`
+- Fill in your actual keys in `api_keys.env`
+- Never commit `api_keys.env` (it's gitignored)
 
 ---
 
