@@ -1,7 +1,43 @@
 # SKIE_Ninja Strategy Validation Report
 
-**Generated:** 2025-12-05
-**Phase:** 14 - Enhanced Validation Complete
+**Generated:** 2025-12-07
+**Updated:** 2026-01-05 (Critical Audit Findings Added)
+**Phase:** 15 - NT8 Integration & Sentiment Data Resolution
+
+---
+
+## CANONICAL VALIDATION COMPLETE (2026-01-05)
+
+**STATUS: FULL REVALIDATION COMPLETE - EDGE REDUCED 50%**
+
+The original $674K edge was 50% inflated due to data leakage from insufficient embargo.
+
+| Issue | Impact | Status |
+|-------|--------|--------|
+| No CPCV implementation | High variance estimates | **IMPLEMENTED** |
+| No PBO calculation | Selection bias unquantified | **IMPLEMENTED** |
+| No Deflated Sharpe Ratio | Multiple testing not corrected | **IMPLEMENTED & VALIDATED** |
+| Inconsistent embargo (20 vs 42 bars) | Data leakage risk | **FIXED** (now 210 bars) |
+
+### Complete Revalidation Results
+
+| Period | Old P&L | New P&L | Change | DSR p-value |
+|--------|---------|---------|--------|-------------|
+| In-Sample 2023-24 | $114,447 | $158,212 | +38% | 0.000 *** |
+| OOS 2020-22 | $502,219 | $142,867 | **-72%** | 1.000 NS |
+| Forward 2025 | $57,394 | $34,771 | -39% | 0.932 NS |
+| **TOTAL** | **$674,060** | **$335,850** | **-50%** | 0.978 NS |
+
+### Key Findings
+
+1. **In-Sample IMPROVED**: Proper purging allowed model to learn real patterns
+2. **OOS DEGRADED 72%**: Original results included information leakage
+3. **OOS/Forward NOT SIGNIFICANT**: Cannot reject null hypothesis after DSR correction
+4. **True edge is ~$336K** (not $674K) across 5 years
+
+**See**: `data/validation_results/CANONICAL_VALIDATION_RESULTS_20260105.md` for complete analysis.
+
+**VERDICT**: Edge likely exists but is smaller than originally reported. Position size conservatively.
 
 ---
 
@@ -13,6 +49,8 @@ The ensemble strategy (Volatility Breakout + VIX Sentiment) has undergone compre
 2. **Parameter Sensitivity Analysis** - Entry thresholds ROBUST, exit multipliers FRAGILE
 3. **Regime Analysis** - Profitable across all tested years (2020-2022)
 4. **Enhanced Monte Carlo Stress Tests** - Comprehensive robustness validation
+5. **NT8 Walk-Forward Integration** - VIX data access FIXED, sentiment data issue IDENTIFIED
+6. **Sentiment Data Architecture** - Python-NT8 bridge solution PLANNED
 
 ---
 
@@ -274,12 +312,176 @@ Note: VIX data coverage was limited for OOS period (2020-2022), resulting in "un
 
 ---
 
-## 7. Next Steps
+## 8. NT8 Walk-Forward Integration (Phase 15)
 
-### Phase 14: Production Deployment
-- [ ] Complete paper trading validation (30-60 days)
-- [ ] NinjaTrader ONNX export
-- [ ] VPS setup and monitoring
+### Issue Discovery: NT8 vs Python Trade Count Discrepancy
+
+| Metric | Python Walk-Forward | NT8 Backtest |
+|--------|---------------------|--------------|
+| Period | Dec 2023 - Dec 2024 | Dec 2023 - Dec 2024 |
+| Trade Count | ~2,044 | ~4,467 |
+| Net P&L | +$88K (estimated) | -$105K |
+| Sentiment Filter | ACTIVE | NOT WORKING |
+
+### Root Cause Analysis
+
+**Issue 1: VIX Data Access (SOLVED)**
+
+NinjaTrader daily bars only "complete" at market close (4:00 PM). This caused `CurrentBars[1] = -1` even when VIX data was loaded, preventing access via standard `Closes[1][barsAgo]` syntax.
+
+**Solution:** Use direct `BarsArray[1].GetClose(index)` access to bypass the CurrentBars limitation:
+
+```csharp
+// BEFORE (broken):
+double vixClose = Closes[1][barsAgo];  // Fails when CurrentBars[1] = -1
+
+// AFTER (fixed):
+double vixClose = BarsArray[1].GetClose(barIndex);  // Works immediately
+```
+
+**Issue 2: Sentiment Feature Data Mismatch (IDENTIFIED)**
+
+The Python sentiment model was trained on 28 features including:
+- **13 VIX-derived features** (available in NT8 via $VIX)
+- **6 PCR features** (Put/Call Ratio from CBOE - NOT available in NT8)
+- **9 AAII features** (AAII Investor Sentiment Survey - NOT available in NT8)
+
+The C# code was using VIX-derived **proxies** for PCR and AAII:
+
+```csharp
+// PROBLEM: These are approximations, not real data
+double pcrTotal = 0.6 + (vixNormalized * 0.7);  // Fake PCR
+double aaiiBearish = 25 + (vixPercentile * 30); // Fake AAII
+```
+
+**Result:** The sentiment model received garbage inputs for 15 of 28 features, producing unreliable probability outputs that didn't filter trades correctly.
+
+### Solution Architecture: Python-NT8 Bridge
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      PYTHON SIDE                            │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │ Daily Cron   │    │   ML Model   │    │  TCP Server  │  │
+│  │ PCR/AAII     │───►│   Loaded     │◄───│  port 5555   │  │
+│  │ Downloader   │    │   in Memory  │    │              │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ TCP/Socket
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    NINJATRADER SIDE                         │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │  NT8 AddOn   │───►│   Strategy   │───►│   Order      │  │
+│  │  TCP Client  │    │   Logic      │    │   Execution  │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Data Sources Identified
+
+| Data | Source | Update | Cost | Access | Status |
+|------|--------|--------|------|--------|--------|
+| VIX | NinjaTrader $VIX | Real-time | Free | Direct | AVAILABLE |
+| PCR (Total) | CBOE CSV | Daily EOD | Free | `totalpc.csv` | **ENDS 2019** |
+| PCR (Equity) | CBOE CSV | Daily EOD | Free | `equitypc.csv` | **ENDS 2019** |
+| AAII Sentiment | AAII.com | Weekly (Thu) | $29/yr | Membership | PROXY USED |
+
+**Critical Finding:** CBOE's free PCR CSV data ends at October 2019. For 2020+ data, options include:
+1. CBOE DataShop (paid)
+2. Barchart API (subscription)
+3. Use VIX-based proxy (current approach in Python training)
+
+### Implementation Architecture (Revised)
+
+Given the PCR data limitation, we pivot to a **Python Signal Server** approach where:
+- Python has ALL historical sentiment data from training
+- NT8 sends only 42 technical features
+- Python runs the full ensemble model and returns signals
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      PYTHON SIGNAL SERVER                   │
+│                      (localhost:5555)                       │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │ Walk-Forward │    │  Historical  │    │  Ensemble    │  │
+│  │ ONNX Models  │◄───│  Sentiment   │───►│  Filtering   │  │
+│  │ (70 folds)   │    │  (VIX/PCR/   │    │  (agreement) │  │
+│  │              │    │   AAII)      │    │              │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ JSON over TCP
+                              │ Request:  {timestamp, 42 features, atr}
+                              │ Response: {should_trade, direction, probs}
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    NINJATRADER STRATEGY                     │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │  Calculate   │───►│  TCP Client  │───►│   Execute    │  │
+│  │  42 Features │    │  Send/Recv   │    │   Orders     │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Implementation Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/python/data_collection/sentiment_data_downloader.py` | Download PCR from CBOE, create AAII proxy |
+| `src/python/signal_server.py` | TCP server with walk-forward models + sentiment |
+| `data/nt8_sentiment_data.csv` | Combined sentiment export (for backup/validation) |
+
+### Implementation Phases (Revised)
+
+**Phase 1: Sentiment Data Infrastructure** ✅ COMPLETE
+- Created PCR downloader from CBOE (historical to 2019)
+- Created VIX-based AAII proxy generator
+- Documented PCR data limitation
+
+**Phase 2: Python Signal Server** ✅ COMPLETE
+- TCP server on localhost:5555
+- Loads all 70 walk-forward ONNX models
+- Loads historical sentiment data
+- Generates signals with full ensemble filtering
+
+**Phase 3: NT8 TCP Client** 🔄 IN PROGRESS
+- Modify strategy to connect to Python server
+- Send 42 features, receive trading signal
+- Execute trades based on server response
+
+**Phase 4: Validation**
+- Run backtest with NT8 + Python server
+- Validate trade count matches Python (~2,044)
+- Compare P&L to Python walk-forward results
+
+---
+
+## 9. Next Steps
+
+### Phase 15a: File-Based Sentiment Validation (Current)
+- [ ] Create Python script to download PCR from CBOE
+- [ ] Create Python script to download/scrape AAII data
+- [ ] Modify NT8 strategy to read sentiment from CSV
+- [ ] Run backtest to validate trade count (~2,044)
+- [ ] Compare P&L to Python walk-forward results
+
+### Phase 15b: TCP Bridge Implementation
+- [ ] Create Python TCP server with ML model
+- [ ] Create NT8 AddOn as TCP client
+- [ ] Implement signal protocol (JSON)
+- [ ] Test latency and reliability
+- [ ] Add connection monitoring and fallback
+
+### Phase 16: Production Deployment
+- [ ] Set up VPS for Python server
+- [ ] Configure scheduled tasks for data updates
+- [ ] Paper trade for 30-60 days
 - [ ] Live slippage measurement
 - [ ] Risk management implementation
 
@@ -288,8 +490,9 @@ Note: VIX data coverage was limited for OOS period (2020-2022), resulting in "un
 - [ ] Weekly performance vs benchmark comparison
 - [ ] Monthly parameter stability review
 - [ ] Quarterly full validation re-run
+- [ ] Daily sentiment data freshness check
 
 ---
 
 *Report generated by SKIE_Ninja Validation Framework*
-*Last Updated: 2025-12-05*
+*Last Updated: 2025-12-07*

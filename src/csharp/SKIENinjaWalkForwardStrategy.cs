@@ -168,10 +168,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 BarsRequiredToTrade = 55;
                 IsUnmanaged = false;
 
-                // Default paths
+                // Default paths - point to NT8 custom folder with deployed models
                 string docsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                WalkForwardPath = Path.Combine(docsPath, "SKIE_Ninja", "walkforward_models");
-                StaticModelPath = Path.Combine(docsPath, "SKIE_Ninja", "models");
+                WalkForwardPath = Path.Combine(docsPath, "NinjaTrader 8", "bin", "Custom", "SKIE_Ninja_Models", "walkforward_onnx");
+                StaticModelPath = Path.Combine(docsPath, "NinjaTrader 8", "bin", "Custom", "SKIE_Ninja_Models");
 
                 // Default: Walk-Forward mode enabled
                 WalkForwardMode = true;
@@ -183,7 +183,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 LogModelSwitches = true;
 
                 // VIX sentiment settings
-                VixSymbol = "^VIX";  // Common symbol: ^VIX (Kinetick), $VIX.X (CQG), VIX (IB)
+                VixSymbol = "$VIX";  // Common symbol: $VIX (most data feeds), ^VIX (Kinetick), VIX (IB)
                 EnableSentimentFilter = true;
             }
             else if (State == State.Configure)
@@ -252,24 +252,61 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             else if (State == State.Terminated)
             {
+                Print("======================================================");
+                Print("SKIE_Ninja Strategy FINAL SUMMARY");
+                Print("======================================================");
+
                 if (wfPredictor != null)
                 {
-                    Print("======================================================");
-                    Print("Walk-Forward Summary:");
+                    Print("Mode: Walk-Forward");
                     Print("  Model switches: " + wfPredictor.GetModelSwitchCount());
-                    Print("======================================================");
                     wfPredictor.Dispose();
                 }
+                else
+                {
+                    Print("Mode: Static");
+                }
+
                 if (staticPredictor != null)
                 {
                     staticPredictor.Dispose();
                 }
 
-                Print("======================================================");
-                Print("SKIE_Ninja Strategy Terminated");
-                Print("Bars processed: " + barCount);
-                Print("Signals generated: " + signalCount);
-                Print("Trades executed: " + tradeCount);
+                // Sentiment filter status
+                Print("");
+                Print("SENTIMENT FILTER STATUS:");
+                if (EnableSentimentFilter)
+                {
+                    if (vixDataAvailable)
+                    {
+                        Print("  Status: ACTIVE");
+                        Print("  VIX history: " + vixCloseHistory.Count + " days");
+                        Print("  Last VIX: " + lastVixClose.ToString("F2") + " on " + lastVixDate.ToString("yyyy-MM-dd"));
+                        Print("  NOTE: Both tech AND sentiment filters applied");
+                    }
+                    else
+                    {
+                        Print("  Status: DISABLED (VIX data not available)");
+                        Print("  VIX history: " + (vixCloseHistory != null ? vixCloseHistory.Count.ToString() : "null") + " days (need 21)");
+                        Print("  WARNING: Only tech filter applied - more trades than expected");
+                    }
+                }
+                else
+                {
+                    Print("  Status: DISABLED (by user setting)");
+                }
+
+                Print("");
+                Print("TRADING STATISTICS:");
+                Print("  Bars processed: " + barCount);
+                Print("  Signals generated: " + signalCount);
+                Print("  Trades executed: " + tradeCount);
+
+                // Expected trade counts for reference
+                Print("");
+                Print("EXPECTED TRADE COUNTS (2024 full year):");
+                Print("  With sentiment filter: ~2,044 trades");
+                Print("  Without sentiment filter: ~4,357 trades");
                 Print("======================================================");
             }
         }
@@ -343,6 +380,13 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             barCount++;
 
+            // On primary series, also check if VIX data is available (for regular hours data)
+            // VIX daily data may have arrived even if we didn't get an OnBarUpdate for it
+            if (EnableSentimentFilter && !vixDataAvailable && BarsArray.Length > 1)
+            {
+                CheckVixDataAvailability();
+            }
+
             if (!predictorReady)
             {
                 if (barCount == 1)
@@ -410,9 +454,53 @@ namespace NinjaTrader.NinjaScript.Strategies
             double[] sentimentFeatures = null;
             if (EnableSentimentFilter && vixDataAvailable)
             {
+                // Update VIX history from BarsArray if new day arrived
+                UpdateVixFromBarsArray();
+
                 if (CalculateSentimentFeatures())
                 {
                     sentimentFeatures = sentimentFeatureBuffer;
+
+                    // Log first successful sentiment calculation
+                    if (signalCount == 0 && EnableLogging)
+                    {
+                        Print(String.Format("FIRST SIGNAL WITH SENTIMENT: Bar {0}, vixHistory={1}, VIX={2:F2}",
+                            barCount, vixCloseHistory.Count, lastVixClose));
+                    }
+                }
+                else if (signalCount == 0 && EnableLogging)
+                {
+                    Print(String.Format("DIAG: CalculateSentimentFeatures() FAILED at bar {0}. vixHistory={1}",
+                        barCount, vixCloseHistory.Count));
+                }
+            }
+            else if (EnableSentimentFilter && !vixDataAvailable)
+            {
+                // Log periodically while waiting for VIX data
+                if (barCount == 52 || barCount == 100 || barCount == 500 || barCount == 1000)
+                {
+                    int vixBars = (CurrentBars != null && CurrentBars.Length > 1) ? CurrentBars[1] : -999;
+                    Print(String.Format("DIAG Bar {0}: vixDataAvailable=FALSE, vixHistory={1}, CurrentBars[1]={2}",
+                        barCount, vixCloseHistory.Count, vixBars));
+                }
+
+                if (barCount == 52)
+                {
+                    Print("======================================================");
+                    Print("WARNING: VIX SENTIMENT FILTER DISABLED");
+                    Print("  Reason: VIX historical data not available or insufficient");
+                    Print("  VIX history count: " + (vixCloseHistory != null ? vixCloseHistory.Count.ToString() : "null") + " (need 21)");
+                    Print("  BarsArray length: " + (BarsArray != null ? BarsArray.Length.ToString() : "null"));
+                    if (BarsArray != null && BarsArray.Length > 1)
+                    {
+                        Print("  BarsArray[1] count: " + BarsArray[1].Count);
+                        Print("  CurrentBars[1]: " + CurrentBars[1]);
+                    }
+                    Print("  Expected trade count: ~4,357 (vs ~2,044 with sentiment)");
+                    Print("  ");
+                    Print("  To fix: Add VIX as secondary data series to chart");
+                    Print("  See docs/NINJATRADER_INSTALLATION.md for details");
+                    Print("======================================================");
                 }
             }
 
@@ -696,6 +784,12 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (BarsInProgress != 1) return;
 
+            // Safety check - ensure VIX series has data
+            if (BarsArray[1].Count == 0)
+            {
+                return;
+            }
+
             double vixClose = Closes[1][0];
             DateTime vixDate = Times[1][0].Date;
 
@@ -712,11 +806,194 @@ namespace NinjaTrader.NinjaScript.Strategies
                     vixCloseHistory.RemoveAt(0);
                 }
 
+                bool wasAvailable = vixDataAvailable;
                 vixDataAvailable = vixCloseHistory.Count >= 21;
 
-                if (EnableLogging && vixCloseHistory.Count == 21)
+                // Log when we cross the 21-day threshold
+                if (!wasAvailable && vixDataAvailable)
                 {
-                    Print("VIX data ready: 21 days of history available for sentiment features");
+                    Print("======================================================");
+                    Print(String.Format("VIX DATA READY: {0} days of history, SENTIMENT FILTER NOW ACTIVE", vixCloseHistory.Count));
+                    Print(String.Format("  Latest VIX: {0:F2} on {1}", vixClose, vixDate.ToString("yyyy-MM-dd")));
+                    Print("======================================================");
+                }
+
+                // Log progress for first 5 days, day 10, day 15, day 20, and day 21
+                if (EnableLogging && (vixCloseHistory.Count <= 5 || vixCloseHistory.Count == 10 ||
+                    vixCloseHistory.Count == 15 || vixCloseHistory.Count == 20 || vixCloseHistory.Count == 21))
+                {
+                    Print(String.Format("VIX update: {0} = {1:F2} (history: {2} days, vixDataAvailable={3})",
+                        vixDate.ToString("yyyy-MM-dd"), vixClose, vixCloseHistory.Count, vixDataAvailable));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Update VIX history from BarsArray when new daily bar arrives.
+        /// Called each primary bar to check for new VIX data.
+        /// </summary>
+        private void UpdateVixFromBarsArray()
+        {
+            // Use direct BarsArray access to bypass CurrentBars[1] = -1 issue
+            if (BarsArray == null || BarsArray.Length < 2)
+                return;
+
+            int vixTotalBars = BarsArray[1].Count;
+            if (vixTotalBars < 2)
+                return;
+
+            try
+            {
+                // Get the most recent COMPLETED VIX bar using direct access
+                // vixTotalBars-1 is the latest (possibly forming), so use vixTotalBars-2
+                int mostRecentCompleted = vixTotalBars - 2;
+                if (mostRecentCompleted < 0)
+                    return;
+
+                double vixClose = BarsArray[1].GetClose(mostRecentCompleted);
+                DateTime vixDate = BarsArray[1].GetTime(mostRecentCompleted).Date;
+
+                // Only update if we have a new day's data
+                if (vixDate > lastVixDate)
+                {
+                    vixCloseHistory.Add(vixClose);
+                    lastVixClose = vixClose;
+                    lastVixDate = vixDate;
+
+                    // Keep last 25 days for MA calculations
+                    while (vixCloseHistory.Count > 25)
+                    {
+                        vixCloseHistory.RemoveAt(0);
+                    }
+
+                    // Update vixDataAvailable if we now have enough history
+                    if (!vixDataAvailable && vixCloseHistory.Count >= 21)
+                    {
+                        vixDataAvailable = true;
+                        Print("======================================================");
+                        Print(String.Format("VIX DATA NOW AVAILABLE: {0} days of history", vixCloseHistory.Count));
+                        Print("SENTIMENT FILTER ACTIVATED");
+                        Print("======================================================");
+                    }
+
+                    if (EnableLogging && vixCloseHistory.Count <= 25)
+                    {
+                        Print(String.Format("VIX update: {0} = {1:F2} (history: {2} days, available: {3})",
+                            vixDate.ToString("yyyy-MM-dd"), vixClose, vixCloseHistory.Count, vixDataAvailable));
+                    }
+                }
+            }
+            catch
+            {
+                // Silently ignore errors during VIX update
+            }
+        }
+
+        /// <summary>
+        /// Check if VIX data is available by directly checking the BarsArray.
+        /// CRITICAL FIX: Use BarsArray[1].GetClose(index) instead of Closes[1][barsAgo]
+        /// to bypass the CurrentBars[1] = -1 issue with daily bars that haven't fired OnBarUpdate.
+        /// </summary>
+        private void CheckVixDataAvailability()
+        {
+            try
+            {
+                // Check if VIX data series exists
+                if (BarsArray == null || BarsArray.Length < 2)
+                {
+                    if (barCount == 52)
+                    {
+                        Print("WARNING: VIX data series not loaded. BarsArray length: " +
+                            (BarsArray != null ? BarsArray.Length.ToString() : "null"));
+                    }
+                    return;
+                }
+
+                // Get the total number of VIX bars loaded (historical + current)
+                // This is the ACTUAL count of bars, regardless of CurrentBars[1]
+                int vixTotalBars = BarsArray[1].Count;
+
+                // Log VIX data status on first few checks
+                if (barCount <= 55 && barCount % 5 == 0)
+                {
+                    Print(String.Format("VIX data check (bar {0}): CurrentBars[1]={1}, BarsArray[1].Count={2}, vixHistory={3}",
+                        barCount, CurrentBars[1], vixTotalBars, vixCloseHistory.Count));
+                }
+
+                // Need at least 22 bars for sentiment calculations (21 for history + 1 for current)
+                if (vixTotalBars < 22)
+                {
+                    if (barCount == 52)
+                    {
+                        Print(String.Format("VIX data insufficient: only {0} bars in BarsArray[1] (need 22)", vixTotalBars));
+                    }
+                    return;
+                }
+
+                // If we have VIX bars but haven't populated enough history, bulk-load now
+                // Use DIRECT BarsArray access to bypass CurrentBars[1] = -1 issue
+                if (vixTotalBars >= 22 && vixCloseHistory.Count < 21)
+                {
+                    // Clear partial history and reload completely
+                    vixCloseHistory.Clear();
+                    lastVixDate = DateTime.MinValue;
+                    lastVixClose = 0;
+
+                    // Load the last 25 COMPLETED bars (excluding the current forming bar)
+                    // Bar index is 0-based, so vixTotalBars-1 is the latest bar (possibly forming)
+                    // We want vixTotalBars-2 as the most recent COMPLETED bar
+                    int mostRecentCompletedBar = vixTotalBars - 2;
+                    int barsToLoad = Math.Min(mostRecentCompletedBar + 1, 25);
+                    int startIndex = mostRecentCompletedBar - barsToLoad + 1;
+
+                    if (EnableLogging)
+                    {
+                        Print(String.Format("BULK LOADING VIX: {0} bars from index {1} to {2} (using BarsArray.GetClose)",
+                            barsToLoad, startIndex, mostRecentCompletedBar));
+                    }
+
+                    // Load from oldest to newest using DIRECT BarsArray access
+                    for (int barIndex = startIndex; barIndex <= mostRecentCompletedBar; barIndex++)
+                    {
+                        if (barIndex >= 0 && barIndex < vixTotalBars)
+                        {
+                            double vixClose = BarsArray[1].GetClose(barIndex);
+                            DateTime vixDate = BarsArray[1].GetTime(barIndex).Date;
+
+                            if (vixDate > lastVixDate)
+                            {
+                                vixCloseHistory.Add(vixClose);
+                                lastVixClose = vixClose;
+                                lastVixDate = vixDate;
+                            }
+                        }
+                    }
+
+                    vixDataAvailable = vixCloseHistory.Count >= 21;
+
+                    if (vixDataAvailable)
+                    {
+                        Print("======================================================");
+                        Print(String.Format("VIX DATA BULK LOADED: {0} days of history (using BarsArray.GetClose)", vixCloseHistory.Count));
+                        Print("SENTIMENT FILTER NOW ACTIVE");
+                        Print(String.Format("  Latest VIX: {0:F2} on {1}", lastVixClose, lastVixDate.ToString("yyyy-MM-dd")));
+                        Print(String.Format("  VIX range loaded: index {0} to {1}", startIndex, mostRecentCompletedBar));
+                        Print("  Expected trade reduction: ~4,357 → ~2,044");
+                        Print("======================================================");
+                    }
+                    else
+                    {
+                        Print(String.Format("VIX data insufficient: only {0} unique days loaded (need 21), sentiment filter DISABLED",
+                            vixCloseHistory.Count));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Print("WARNING: Error checking VIX data: " + ex.Message);
+                if (ex.StackTrace != null)
+                {
+                    Print("  Stack: " + ex.StackTrace.Substring(0, Math.Min(200, ex.StackTrace.Length)));
                 }
             }
         }

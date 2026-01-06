@@ -54,7 +54,10 @@ class BacktestConfig:
     # Walk-forward parameters
     train_days: int = 180
     test_days: int = 5
-    embargo_bars: int = 42  # ~3.5 hours for 5-min bars
+    # Embargo = max(feature_lookback, label_horizon) + safety_margin
+    # Per Lopez de Prado (2018), Ch. 7: max(200, 30) + 10 = 210
+    # PREVIOUSLY: 42 (INCORRECT - caused potential data leakage)
+    embargo_bars: int = 210
 
     # Costs
     commission_per_trade: float = 2.50  # Per side, per contract

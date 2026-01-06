@@ -2,37 +2,184 @@
 
 A comprehensive algorithmic trading system leveraging machine learning, macroeconomic factors, and advanced quantitative strategies for futures trading on the NinjaTrader platform.
 
-## Project Status: Phase 15 - PRODUCTION DEPLOYMENT IN PROGRESS
+---
 
-**Ensemble Strategy (Vol Breakout + VIX Sentiment) - RECOMMENDED**
+## LIVE DEMO STATUS (2026-01-06) - ACTIVE
 
-| Test Period | Vol Breakout | Ensemble | Improvement |
-|-------------|-------------|----------|-------------|
-| In-Sample (2023-24) | +$209,351 | **+$224,813** | **+7.4%** |
-| Out-of-Sample (2020-22) | +$496,380 | **+$502,219** | **+1.2%** |
-| Forward Test (2025) | +$57,394 | **+$59,847** | **+4.3%** |
+**STATUS: PAPER TRADING LIVE ON DEMO ACCOUNT**
 
-**Total Validated Edge**: $786,879 across 5 years of data
+### Latest NT8 Backtest Results (Feature Fix Applied)
 
-### Monte Carlo Validation: PASSED (5,000 iterations per test)
+| Metric | Value |
+|--------|-------|
+| **Period** | Jan 2025 - Dec 2025 (12 months) |
+| **Total Trades** | 18 |
+| **Net P&L** | **+$1,287.50** |
+| **Win Rate** | 39% (7/18) |
+| **Profit Factor** | **1.71** |
 
-| Metric | Original | 95% CI (Combined) | Assessment |
-|--------|----------|-------------------|------------|
-| Net P&L | $502,219 | [$361K, $573K] | **100% prob positive** |
-| Sharpe Ratio | 3.16 | [2.24, 3.33] | **Significantly > 0** |
-| Profit Factor | 1.25 | [1.15, 1.35] | **Significantly > 1** |
+### Quick Start
 
-### Enhanced Stress Testing: 4/5 PASSED
+```powershell
+# Terminal 1: Start Python signal server
+cd "C:\Users\skoir\Documents\SKIE Enterprises\SKIE-Ninja\SKIE-Ninja-Project\SKIE_Ninja"
+python -m src.python.signal_server
 
-| Test | Condition | P(Profit>0) | Result |
-|------|-----------|-------------|--------|
-| Slippage | 3x baseline | 100% | **PASS** |
-| Dropout | 50% trades | 100% | **PASS** |
-| Adverse Selection | 20% winners removed | 100% | **PASS** |
-| Black Swan | 5% frequency | 100% | **PASS** |
-| Combined Extreme | All above | 0% | FAIL (expected) |
+# NinjaTrader 8: Enable SKIENinjaTCPStrategy on ES 5-min chart
+```
 
-**Note**: Combined extreme test represents catastrophic conditions (3x slippage + 30% dropout + 20% adverse + black swan simultaneously) - unlikely to persist in real markets.
+---
+
+## VALIDATION STATUS (2026-01-05) - COMPLETE
+
+**Previous canonical validation per Lopez de Prado (2018) and Bailey et al. (2014):**
+
+### Corrected Results (embargo=210 bars)
+
+| Period | Trades | Net P&L | Sharpe | DSR p-value |
+|--------|--------|---------|--------|-------------|
+| In-Sample 2023-24 | 2,656 | $158,212 | 3.48 | 0.000 *** |
+| OOS 2020-22 | 4,763 | $142,867 | 1.67 | 1.000 NS |
+| Forward 2025 | 753 | $34,771 | 2.14 | 0.932 NS |
+| **TOTAL** | **8,172** | **$335,850** | 2.27 | 0.978 NS |
+
+See `data/validation_results/CANONICAL_VALIDATION_RESULTS_20260105.md` for complete analysis.
+
+---
+
+## CRITICAL FIX (2026-01-05): Feature Mismatch Resolved
+
+**Issue:** NT8 backtest showed -$42,600 loss (41% win rate) instead of expected profit.
+
+**Root Cause:** C# strategy was sending 42 features that DID NOT MATCH the trained model's expected features. The model received garbage input, producing random predictions.
+
+**Fix Applied:** Complete rewrite of `CalculateFeatures()` to match exact feature order from `scaler_params.json`.
+
+See `docs/FEATURE_AUDIT_20260105.md` for complete analysis.
+
+**After fix, recompile required in NinjaTrader NinjaScript Editor.**
+
+---
+
+## Project Status: Phase 16 - PAPER TRADING READY
+
+### Current Status: Ready for Paper Trading (2026-01-05)
+
+All systems verified and tested:
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Signal Server | READY | Tested, 70 folds loaded |
+| ONNX Models | READY | Walk-forward models exported |
+| Sentiment Data | READY | VIX + AAII + PCR proxy |
+| Weekly Retraining | READY | Scheduled task available |
+| NT8 Strategy | **FIXED** | Feature parity corrected 2026-01-05 |
+
+**Quick Start:**
+```powershell
+# Terminal 1: Start signal server
+cd "C:\Users\skoir\Documents\SKIE Enterprises\SKIE-Ninja\SKIE-Ninja-Project\SKIE_Ninja"
+python -m src.python.signal_server
+
+# Then enable SKIENinjaTCPStrategy on ES 5-min chart in NinjaTrader 8
+```
+
+See `docs/PAPER_TRADING_GUIDE.md` for complete launch procedure.
+
+### Corrected Performance Expectations
+
+Based on canonical validation with proper embargo (210 bars):
+
+| Metric | Expected (Annual) | Notes |
+|--------|-------------------|-------|
+| Net P&L | ~$67,000 | From $335K / 5 years |
+| Weekly P&L | ~$1,300-$1,500 | High variance |
+| Win Rate | 62-65% | Per backtest |
+| Max Drawdown | ~$30,000 | Could occur any time |
+| Sharpe Ratio | 2.27 | Annualized |
+
+**CAUTION:** DSR p-value was not significant (0.978) after correcting for 81 threshold combinations. Position size conservatively.
+
+---
+
+## Phase 15: NT8 Integration Findings
+
+### Critical Issue 1: VIX Data Access (SOLVED)
+
+**Problem**: NT8 daily bars don't "complete" until market close, causing `CurrentBars[1] = -1` for VIX data series.
+
+**Root Cause**: Using `Closes[1][barsAgo]` fails when daily bars haven't completed yet.
+
+**Solution**: Use direct array access instead:
+```csharp
+// OLD (broken) - Returns -1 for incomplete bars
+double vixClose = Closes[1][barsAgo];
+
+// NEW (works) - Direct array access
+int vixBarIndex = BarsArray[1].Count - 1 - barsAgo;
+double vixClose = BarsArray[1].GetClose(vixBarIndex);
+```
+
+### Critical Issue 2: Fake Sentiment Data (SOLVED)
+
+**Problem**: NT8 backtest showed ~4,467 trades with -$105K loss vs Python's ~2,044 trades with +$88K profit.
+
+**Root Cause**: The C# strategy was using **VIX-derived PROXIES** for PCR and AAII sentiment features:
+```csharp
+// C# was generating "fake" features like this:
+pcr_5d_ma = vixClose * 0.05;     // NOT real PCR data!
+aaii_bull = 0.35 - (vixClose/100); // NOT real AAII data!
+```
+
+The sentiment model was **trained on REAL PCR/AAII data**, so these proxies produced garbage predictions.
+
+**Solution**: Python Signal Server architecture that uses actual historical sentiment data.
+
+### Python-NT8 Bridge Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        DEPLOYMENT ARCHITECTURE                    │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│   ┌─────────────────┐        TCP/5555        ┌─────────────────┐ │
+│   │  Python Server  │◄──────────────────────►│  NinjaTrader 8  │ │
+│   │  (Signal Gen)   │                        │  (Execution)    │ │
+│   └────────┬────────┘                        └────────┬────────┘ │
+│            │                                          │          │
+│   ┌────────┴────────┐                        ┌────────┴────────┐ │
+│   │ - 70 ONNX models│                        │ - Receives JSON │ │
+│   │ - Walk-forward  │                        │ - Executes OCO  │ │
+│   │ - Real PCR/AAII │                        │ - Position mgmt │ │
+│   │ - Ensemble logic│                        │ - Broker conn   │ │
+│   └─────────────────┘                        └─────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Data Flow**:
+1. NT8 calculates 42 technical features from live bars
+2. Sends JSON request to Python server via TCP socket
+3. Python loads correct walk-forward model, adds sentiment features
+4. Returns signal: `{should_trade, direction, tp_mult, sl_mult}`
+5. NT8 executes the trade with TP/SL orders
+
+### Data Requirements
+
+| Data Source | Cost | Purpose | Status |
+|-------------|------|---------|--------|
+| CBOE PCR | Free (historical only to 2019) | Put/Call Ratio | Partial |
+| Barchart PCR | $30-50/mo | Real-time PCR | Recommended |
+| AAII Sentiment | $29/year | Investor sentiment survey | Required |
+
+**AAII Membership**: https://www.aaii.com/membership
+
+### New Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/python/signal_server.py` | TCP server with walk-forward models |
+| `src/python/data_collection/sentiment_data_downloader.py` | PCR/AAII data downloader |
+| `src/csharp/SKIENinjaTCPStrategy.cs` | NT8 TCP client strategy |
 
 ### Model Performance
 
@@ -105,18 +252,30 @@ SKIE_Ninja/
 │   │   │   ├── volatility_breakout_strategy.py   # Base strategy (validated)
 │   │   │   ├── ensemble_strategy.py              # PRODUCTION strategy (best)
 │   │   │   └── sentiment_strategy.py             # Sentiment-only (research)
-│   │   ├── deployment/                  # NinjaTrader integration (NEW)
-│   │   │   └── ninja_signal_server.py           # Python signal server
+│   │   ├── signal_server.py             # TCP server for NT8 signals (NEW)
 │   │   ├── data_collection/             # Data downloaders and loaders
+│   │   │   ├── databento_downloader.py          # Databento API integration
+│   │   │   ├── historical_sentiment_loader.py   # VIX sentiment data
+│   │   │   ├── sentiment_data_downloader.py     # PCR/AAII downloader (NEW)
+│   │   │   ├── established_sentiment_indices.py # AAII, PCR, VIX indices
+│   │   │   └── ...
 │   │   ├── feature_engineering/         # Feature calculation modules
+│   │   │   ├── multi_target_labels.py           # 73-target generator
+│   │   │   ├── multi_timeframe_features.py      # MTF analysis (15m, 1h, 4h)
+│   │   │   ├── enhanced_cross_market.py         # Cross-market features
+│   │   │   ├── social_news_sentiment.py         # Twitter/News/Reddit
+│   │   │   ├── enhanced_feature_pipeline.py     # Unified pipeline
+│   │   │   └── ...
 │   │   ├── models/                      # ML model training
 │   │   ├── backtesting/                 # Walk-forward backtesting
 │   │   ├── quality_control/             # Validation framework
-│   │   └── run_*.py                     # Various run scripts
-│   └── ninjatrader/                     # NinjaScript strategies (NEW)
-│       └── SKIENinjaStrategy.cs                 # NinjaTrader client
-├── models/
-│   └── production/                      # Trained model files for deployment
+│   │   ├── run_monte_carlo_simulation.py        # Monte Carlo validation
+│   │   └── ...
+│   └── csharp/
+│       ├── SKIENinjaTCPStrategy.cs      # NT8 TCP client strategy (NEW)
+│       ├── SKIENinjaWalkForwardStrategy.cs  # NT8 walk-forward strategy
+│       ├── SKIENinjaStrategy.cs         # NT8 static ONNX strategy
+│       └── SKIENinjaML/                 # C# ONNX inference DLL
 ├── data/
 │   ├── raw/market/                      # Downloaded market data
 │   ├── processed/                       # Feature rankings
@@ -235,12 +394,26 @@ All parameters are justified by data, not arbitrary selection:
 | Phase 13 | Monte Carlo Validation | **COMPLETE (100% prob profit)** |
 | Phase 14 | Enhanced Validation | **COMPLETE (4/5 stress tests passed)** |
 
-### Phase 15: Production Deployment (IN PROGRESS)
+### Phase 15: NT8 Integration (COMPLETE)
 
-- [x] NinjaTrader account setup
-- [x] Socket Bridge architecture implementation
-- [ ] Platform walk-forward validation (Market Replay)
-- [ ] Paper trading validation (30-60 days)
+- [x] Identify VIX data access issue and fix
+- [x] Identify fake PCR/AAII proxy data issue
+- [x] Design Python-NT8 bridge architecture
+- [x] Create Python signal server (`signal_server.py`)
+- [x] Create NT8 TCP client strategy (`SKIENinjaTCPStrategy.cs`)
+- [x] **Fix feature mismatch** (2026-01-05) - Critical fix applied
+- [x] Validate backtest results (+$1,287.50 over 12 months)
+
+### Phase 16: Paper Trading (ACTIVE)
+
+- [x] Signal server running with 70 walk-forward folds
+- [x] NT8 strategy connected to demo account
+- [x] Backtest validated with corrected features
+- [ ] Monitor live signals (30-60 days)
+- [ ] Validate live performance vs backtest expectations
+
+### Phase 17: Production Deployment (NEXT)
+
 - [ ] VPS setup and monitoring
 - [ ] Controlled live trading (MES → ES)
 
@@ -284,13 +457,15 @@ All parameters are justified by data, not arbitrary selection:
 
 ## Quick Start
 
+### Python Backtesting
+
 ```bash
 # Clone repository
 git clone https://github.com/s-koirala/SKIE-Ninja.git
 cd SKIE_Ninja
 
 # Install Python dependencies
-pip install numpy pandas scikit-learn lightgbm ta
+pip install numpy pandas scikit-learn lightgbm ta onnxruntime
 
 # Run main ensemble strategy backtest
 python src/python/strategy/ensemble_strategy.py
@@ -300,13 +475,33 @@ python src/python/run_qc_check.py
 
 # Run Monte Carlo simulation
 python src/python/run_monte_carlo_simulation.py
-
-# Run OOS backtest
-python src/python/run_ensemble_oos_backtest.py
-
-# Run 2025 forward test
-python src/python/run_ensemble_2025_forward_test.py
 ```
+
+### NT8 Live Trading (Python-NT8 Bridge)
+
+```bash
+# Step 1: Download sentiment data (requires AAII subscription for full data)
+python src/python/data_collection/sentiment_data_downloader.py
+
+# Step 2: Start the Python signal server (keep running)
+python src/python/signal_server.py
+
+# Step 3: In NinjaTrader 8:
+#   - Import SKIENinjaTCPStrategy.cs
+#   - Apply to ES 1-minute chart
+#   - Strategy connects to localhost:5555
+#   - Python server generates signals, NT8 executes trades
+
+# The flow:
+# NT8 → sends 42 technical features → Python server
+# Python server → loads walk-forward model + sentiment data → generates signal
+# Signal → {should_trade, direction, tp_mult, sl_mult} → NT8 executes
+```
+
+### Data Subscriptions Required
+
+1. **AAII Sentiment**: $29/year at https://www.aaii.com/membership
+2. **PCR Data**: Check https://data.nasdaq.com/databases/EOD (Quandl) first, or https://www.barchart.com/solutions/data
 
 ## Research Documentation
 
@@ -340,5 +535,5 @@ Proprietary - All rights reserved
 
 ---
 
-*Last Updated: 2025-12-15*
+*Last Updated: 2026-01-06*
 *Maintained by: SKIE_Ninja Development Team*

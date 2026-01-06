@@ -1,0 +1,2 @@
+timestamp,vol_auc,vol_auc_ci_lower,vol_p_value,t1_provided,high_auc,low_auc,pbo,pbo_method,pbo_periods_per_year,pbo_interpretation,dsr,dsr_p_value,dsr_observed_sharpe,dsr_haircut,dsr_interpretation,cpcv_pass,pbo_pass,dsr_pass,overall_pass
+20260106_045950,0.7596893330675017,0.7303676614336461,1.609161389710671e-11,True,0.7208811632047374,0.7205532428151199,0.627,monte_carlo_cscv,19656,HIGH OVERFITTING RISK - Strategy likely overfit,-28.832526089082144,1.0,-6.682011116011561,2.0565604109695883,NOT SIGNIFICANT - Observed Sharpe likely due to chance,True,False,False,False

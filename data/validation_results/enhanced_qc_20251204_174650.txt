@@ -1,0 +1,34 @@
+ENHANCED FEATURE QC RESULTS
+======================================================================
+
+Timestamp: 2025-12-04T17:45:55.965804
+Overall Result: FAILED
+
+
+CODE_PATTERNS
+----------------------------------------
+  files_checked: 18
+  shift_negative: [truncated - 28]
+  center_true: [truncated - 3]
+  other_issues: []
+
+FEATURE_QUALITY
+----------------------------------------
+  total_features: 343
+  nan_analysis: [truncated - complex]
+  constant_features: [truncated - 20]
+  infinite_values: 0
+  highly_correlated_pairs: [truncated - 316]
+
+CORRELATION
+----------------------------------------
+  total_features: 343
+  suspicious_features: []
+  correlation_stats: {'mean': -0.011245606612101602, 'max': 0.07644265841891157, 'std': 0.03337138674173265}
+
+TEMPORAL_LEAKAGE
+----------------------------------------
+  test_performed: True
+  forward_auc: 0.5319415203176885
+  reverse_auc: 0.4915622911563975
+  leakage_detected: False

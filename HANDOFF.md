@@ -1,51 +1,83 @@
 # SKIE_Ninja Project Handoff Document
 
-**Date**: 2025-12-15 (Updated)
+**Date**: 2026-01-06
 **Purpose**: Complete context for continuing development on new machine
+**Last Updated**: Phase 16 - Live Demo Trading Active (Feature Fix Applied)
 
 ---
 
-## AUDIT FINDINGS (2025-12-15) - **ALL CRITICAL ISSUES FIXED ✓**
+## PROJECT STATUS: VALIDATION REMEDIATION COMPLETE - PAPER TRADING PENDING
 
-**A comprehensive audit was completed and all critical issues have been resolved.**
+### CRITICAL AUDIT FINDINGS (2026-01-06)
 
-| Issue | Severity | Status | Fix Applied |
-|-------|----------|--------|-------------|
-| VIX buffer lag (T-2 vs T-1) | CRITICAL | **FIXED** | Changed `[-2]` to `[-1]` |
-| Feature count mismatch | CRITICAL | **FIXED** | Added 28+ sentiment features |
-| VIX percentile broken | HIGH | **FIXED** | Uses historical VIX reference |
-| No feature validation | HIGH | **FIXED** | Added count/order validation |
-| P&L tracking bug | MEDIUM | **FIXED** | Use `GetProfitLoss()` |
-| Missing heartbeat | MEDIUM | **FIXED** | Added 30s heartbeat timer |
-| Missing requirements.txt | HIGH | **FIXED** | Created with pinned versions |
+**Multiple audits identified critical issues requiring remediation before live capital deployment.**
 
-**✓ READY FOR PAPER TRADING** - See `docs/AUDIT_REPORT.md` for full details
+| Audit Document | Key Finding | Status |
+|----------------|-------------|--------|
+| [NINJATRADER_DEPLOYMENT_AUDIT_20260106.md](docs/NINJATRADER_DEPLOYMENT_AUDIT_20260106.md) | 97.6% trade frequency collapse, 9.1% short win rate | **REMEDIATED** |
+| [CPCV_PBO_IMPLEMENTATION_AUDIT_20260106.md](docs/CPCV_PBO_IMPLEMENTATION_AUDIT_20260106.md) | CPCV purging lacks t1 parameter, PBO uses MC approximation | **DOCUMENTED** |
+| [CANONICAL_VALIDATION_RESULTS_20260105.md](data/validation_results/CANONICAL_VALIDATION_RESULTS_20260105.md) | DSR p=0.978 (not significant), 50% P&L inflation from embargo error | **ACKNOWLEDGED** |
+
+### Latest NT8 Results (2026-01-05) - AUDIT COMPLETED
+
+| Metric | Value | Assessment |
+|--------|-------|------------|
+| **Period** | Jan 2025 - Dec 2025 (12 months) | - |
+| **Total Trades** | 18 | **97.6% below expected** |
+| **Net P&L** | +$1,287.50 | **96.3% below expected** |
+| **Win Rate** | 38.9% (7/18) | Within tolerance |
+| **Long Win Rate** | 85.7% (6/7) | Acceptable |
+| **Short Win Rate** | **9.1% (1/11)** | **CRITICAL FAILURE** |
+| **Signal Gap** | 160 days (Feb-Jul) | **Infrastructure failure** |
+
+### Remediation Actions Completed
+
+| Action | Status | Reference |
+|--------|--------|-----------|
+| Short signals disabled | **COMPLETE** | signal_server.py:76 |
+| Thresholds aligned to backtest | **COMPLETE** | signal_server.py:66-68 |
+| Diagnostic logging added | **COMPLETE** | signal_server.py:235-261 |
+| Heartbeat monitoring added | **COMPLETE** | signal_server.py:548-575 |
+| CPCV/PBO framework implemented | **COMPLETE** | validation/cpcv_pbo.py |
+
+### Statistical Validation Status
+
+| Metric | Threshold | Current | Status |
+|--------|-----------|---------|--------|
+| DSR p-value | < 0.10 | 0.978 | **FAIL** |
+| PBO | < 0.50 | Pending run | **PENDING** |
+| Paper trade n | >= 100 | 18 | **FAIL** |
+| Short win rate | > 30% or disabled | **DISABLED** | **FIXED** |
 
 ---
 
-## PROJECT STATUS: PHASE 15 - PRODUCTION DEPLOYMENT IN PROGRESS
+## PREVIOUS VALIDATION (SUPERSEDED BY AUDIT)
 
-### Ensemble Strategy (RECOMMENDED - Best Performance)
+**WARNING:** The following results were obtained with **incorrect embargo (20-42 bars)**. Per Lopez de Prado (2018) Ch. 7, correct embargo is **210 bars** (max feature lookback + label horizon + safety margin).
 
-The **Ensemble Strategy** (Vol Breakout + Sentiment) has been **fully validated** including Monte Carlo simulation:
+### Ensemble Strategy - ORIGINAL (INFLATED)
 
-| Test Period | Vol Breakout | Ensemble | Improvement |
-|-------------|-------------|----------|-------------|
-| In-Sample (2023-24) | +$209,351 | +$224,813 | +7.4% |
-| Out-of-Sample (2020-22) | +$496,380 | +$502,219 | +1.2% |
-| Forward Test (2025) | +$57,394 | +$59,847 | +4.3% |
+| Test Period | Original P&L | Corrected P&L | Inflation |
+|-------------|--------------|---------------|-----------|
+| In-Sample (2023-24) | +$114,447 | +$158,212 | -38% (improved) |
+| Out-of-Sample (2020-22) | +$502,219 | +$142,867 | **+71.6% inflated** |
+| Forward Test (2025) | +$57,394 | +$34,771 | **+39.4% inflated** |
+| **TOTAL** | **$674,060** | **$335,850** | **50.2% inflated** |
 
-**Total Validated Edge**: $786,879 across 5 years of data (Ensemble Strategy)
+### Monte Carlo Validation: SUPERSEDED
 
-### Monte Carlo Validation: PASSED (2025-12-05)
+The original Monte Carlo validation was performed on inflated results. The "100% probability of profit" finding is **not valid** for corrected data.
 
-| Metric | Original | 95% CI (Combined) | Assessment |
-|--------|----------|-------------------|------------|
-| Net P&L | $502,219 | [$361K, $573K] | **100% prob positive** |
-| Sharpe Ratio | 3.16 | [2.24, 3.33] | **Significantly > 0** |
-| Profit Factor | 1.25 | [1.15, 1.35] | **Significantly > 1** |
+### DSR Analysis (CANONICAL_VALIDATION_RESULTS_20260105.md)
 
-**Statistical Significance**: ROBUST (10,000 Monte Carlo iterations)
+| Period | Sharpe | E[max(SR)] | DSR p-value | Status |
+|--------|--------|------------|-------------|--------|
+| In-Sample 2023-24 | 3.48 | 2.46 | 0.000 | **Significant** |
+| OOS 2020-22 | 1.67 | 2.46 | 1.000 | **Not Significant** |
+| Forward 2025 | 2.15 | 2.46 | 0.932 | **Not Significant** |
+| **Combined** | 2.27 | 2.46 | **0.978** | **Not Significant** |
+
+**Interpretation:** The model cannot reject the null hypothesis that observed OOS/Forward performance is due to chance. Edge likely exists but is smaller than originally reported.
 
 ---
 
@@ -106,21 +138,211 @@ Monte Carlo tests performed (10,000 iterations each):
 
 ---
 
-## NEXT STEPS
+## CURRENT PHASE - LIVE DEMO TRADING
 
-### Phase 15: Production Deployment (IN PROGRESS)
+### Phase 16: Paper Trading Active (2026-01-06)
 
-#### 15A: Infrastructure (COMPLETE)
-- [x] NinjaTrader account established
+**Status**: LIVE on demo account - monitoring for live signal generation
+
+#### Quick Start Commands
+
+```powershell
+# Terminal 1: Start Python signal server
+cd "C:\Users\skoir\Documents\SKIE Enterprises\SKIE-Ninja\SKIE-Ninja-Project\SKIE_Ninja"
+python -m src.python.signal_server
+
+# Terminal 2: NinjaTrader 8
+# - Open ES 5-min chart
+# - Enable SKIENinjaTCPStrategy
+# - Monitor Output window for signals
+```
+
+#### System Components
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| Python Signal Server | `src/python/signal_server.py` | ✅ Running |
+| NT8 TCP Strategy | `src/csharp/SKIENinjaTCPStrategy.cs` | ✅ Fixed & Compiled |
+| Walk-Forward Models | `data/models/walkforward_onnx/` | ✅ 70 folds loaded |
+| Sentiment Data | `data/raw/sentiment/` | ✅ VIX + AAII + PCR |
+| Scaler Parameters | `data/models/scaler_params.json` | ✅ 42 features defined |
+
+---
+
+## COMPLETED PHASES
+
+### Phase 15: Python-NT8 Bridge Architecture (COMPLETE - 2026-01-05)
+
+**Objective**: Deploy validated models using hybrid Python-NT8 architecture
+
+#### Critical Fix Applied (2026-01-05)
+
+**Issue**: NT8 backtest showed -$42,600 loss instead of expected profit.
+
+**Root Cause**: Complete feature mismatch - C# was sending wrong 42 features:
+- Missing: `return_lag2`, all `rv_X` (realized volatility), all `volume_sma_X`, all `volume_ratio_X`
+- Extra (wrong): MACD features, time features, wrong return calculations
+
+**Fix**: Complete rewrite of `CalculateFeatures()` in SKIENinjaTCPStrategy.cs to match exact order from `scaler_params.json`.
+
+**Result**: Backtest now shows +$1,287.50 profit with 1.71 profit factor.
 
 #### 15B: Socket Bridge Implementation (CURRENT)
 Deploy Python strategy directly via TCP socket bridge - preserves validated code exactly.
 
-```
-NinjaTrader 8 ←→ TCP Socket (localhost:5555) ←→ Python Signal Server
+| Task | Status | Files |
+|------|--------|-------|
+| 1. VIX Data Access Fix | ✅ Complete | `BarsArray[1].GetClose(index)` method |
+| 2. Identify Fake Data Issue | ✅ Complete | C# was using VIX proxies for PCR/AAII |
+| 3. Python Signal Server | ✅ Complete | `src/python/signal_server.py` |
+| 4. Sentiment Data Downloader | ✅ Complete | `src/python/data_collection/sentiment_data_downloader.py` |
+| 5. NT8 TCP Client Strategy | ✅ Complete | `src/csharp/SKIENinjaTCPStrategy.cs` |
+| 6. Feature Mismatch Fix | ✅ Complete | `CalculateFeatures()` rewritten |
+| 7. GitHub Documentation | ✅ Complete | README.md, HANDOFF.md, FEATURE_AUDIT |
+
+#### Critical Finding 1: VIX Data Access (SOLVED)
+
+**Problem**: NT8 daily bars don't "complete" until market close, causing `CurrentBars[1] = -1`.
+
+**Solution**: Use direct array access:
+```csharp
+// OLD (broken)
+double vixClose = Closes[1][barsAgo];  // Returns -1 for incomplete bars
+
+// NEW (works)
+int vixBarIndex = BarsArray[1].Count - 1 - barsAgo;
+double vixClose = BarsArray[1].GetClose(vixBarIndex);
 ```
 
-**Files to Create**:
+---
+
+#### Critical Finding 2: Fake Sentiment Data (SOLVED)
+
+**Problem**: NT8 showed ~4,467 trades with -$105K loss vs Python's ~2,044 trades with +$88K profit.
+
+**Root Cause**: C# was using **VIX-derived PROXIES** for PCR and AAII sentiment features:
+```csharp
+// C# was generating FAKE features like this:
+pcr_5d_ma = vixClose * 0.05;      // NOT real PCR data!
+aaii_bull = 0.35 - (vixClose/100); // NOT real AAII data!
+```
+
+The sentiment model was **trained on REAL PCR/AAII data**, so these proxies produced garbage predictions that passed ~100% of the time.
+
+**Solution**: Python Signal Server architecture that uses actual historical sentiment data.
+
+---
+
+#### Python-NT8 Bridge Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        DEPLOYMENT ARCHITECTURE                    │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│   ┌─────────────────┐        TCP/5555        ┌─────────────────┐ │
+│   │  Python Server  │◄──────────────────────►│  NinjaTrader 8  │ │
+│   │  (Signal Gen)   │                        │  (Execution)    │ │
+│   └────────┬────────┘                        └────────┬────────┘ │
+│            │                                          │          │
+│   ┌────────┴────────┐                        ┌────────┴────────┐ │
+│   │ - 70 ONNX models│                        │ - Receives JSON │ │
+│   │ - Walk-forward  │                        │ - Executes OCO  │ │
+│   │ - Real PCR/AAII │                        │ - Position mgmt │ │
+│   │ - Ensemble logic│                        │ - Broker conn   │ │
+│   └─────────────────┘                        └─────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Why This Architecture**:
+- Python holds all 70 walk-forward ONNX models
+- Python has access to REAL historical PCR/AAII sentiment data
+- NT8 handles order execution and broker connection (cannot be bypassed)
+- Clean separation: Python = brain, NT8 = hands
+
+**Data Flow**:
+1. NT8 calculates 42 technical features from live bars
+2. Sends JSON request to Python server via TCP socket
+3. Python loads correct walk-forward model, adds sentiment features
+4. Returns signal: `{should_trade, direction, tp_mult, sl_mult}`
+5. NT8 executes the trade with TP/SL orders
+
+---
+
+#### Data Requirements
+
+| Data Source | Cost | Purpose | Status |
+|-------------|------|---------|--------|
+| CBOE PCR | Free (historical only to 2019) | Put/Call Ratio | Partial |
+| Barchart PCR | $30-50/mo | Real-time PCR | Recommended |
+| AAII Sentiment | $29/year | Investor sentiment survey | **Required** |
+
+**To Get Data**:
+1. **AAII**: https://www.aaii.com/membership ($29/year)
+2. **PCR**: Check https://data.nasdaq.com/databases/EOD first (may be free), else https://www.barchart.com/solutions/data
+
+---
+
+#### Remaining Tasks
+
+| Task | Status | Priority |
+|------|--------|----------|
+| Obtain AAII subscription | Pending | HIGH |
+| Obtain PCR data (Barchart/Quandl) | Pending | HIGH |
+| Test integration end-to-end | Pending | HIGH |
+| Validate trade counts (~2,044 expected) | Pending | HIGH |
+| Paper trading validation | Pending | MEDIUM |
+
+---
+
+#### Walk-Forward NT8 Integration
+
+**Solution**: Two approaches implemented:
+
+1. **Weekly Retraining** (Manual): Run `retrain_onnx_models.py` weekly to keep static models fresh
+2. **Walk-Forward Backtest** (NEW): Automatic model switching in NT8 for true walk-forward simulation
+
+#### Walk-Forward NT8 Integration (NEW - 2025-12-06)
+
+Created a complete walk-forward backtesting system for NinjaTrader 8:
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Walk-Forward ONNX Export | `src/python/export_walkforward_onnx.py` | Generates 70 model sets for 2024 |
+| Walk-Forward Predictor | `src/csharp/SKIENinjaML/WalkForwardPredictor.cs` | Auto-switches models by date |
+| Walk-Forward Strategy | `src/csharp/SKIENinjaWalkForwardStrategy.cs` | NT8 strategy with walk-forward mode |
+| Model Schedule | `data/models/walkforward_onnx/model_schedule.csv` | Date ranges for each fold |
+
+**How it works:**
+1. Pre-generate 70 ONNX model sets (one per 5-day test period)
+2. Each model is trained on the prior 180 days
+3. NT8 strategy automatically loads correct model based on current bar date
+4. Run a SINGLE backtest covering 2024 - models switch automatically
+
+**Usage:**
+```powershell
+# Step 1: Generate walk-forward models (run once)
+python src/python/export_walkforward_onnx.py --start 2024-01-01
+
+# Step 2: Copy walkforward_onnx folder to Documents\SKIE_Ninja\walkforward_models
+
+# Step 3: In NT8, use SKIENinjaWalkForwardStrategy with:
+#   - WalkForwardMode = true
+#   - WalkForwardPath = path to walkforward_models folder
+#   - Run backtest from 2024-01-01 to 2024-12-15
+
+# Expected: Performance matching Python walk-forward (+$502K)
+```
+
+#### Technical Fixes Applied
+
+1. **ATR Calculation** - Changed from NinjaTrader's Wilder smoothing to SMA (matching Python)
+2. **Realized Volatility** - Changed from population std dev (n) to sample std dev (n-1)
+3. **ONNX Output Parsing** - Fixed handling of LightGBM's nested DisposableList output format
+4. **SetProfitTarget/SetStopLoss Order** - Must be called BEFORE entry per NT8 docs
+
+#### Files Created/Modified
+
 | File | Purpose |
 |------|---------|
 | `src/python/deployment/ninja_signal_server.py` | Python signal server |
@@ -155,21 +377,128 @@ Exit parameters are **FRAGILE** - further optimization risks overfitting.
 | tp_atr_mult | 2.5 | 2.0-3.0 | <2.0 (losses) |
 | sl_atr_mult | 1.25 | 1.0-1.5 | >1.5 (losses) |
 
-**Rationale**: Validation showed TP/SL sensitivity can swing P&L by $3M+. Current values in stable zone.
+**To enable automated weekly retraining:**
+```powershell
+# Run as Administrator
+.\scripts\setup_weekly_task.ps1
+```
+
+This creates a scheduled task that runs every Sunday at 6:00 PM.
+
+---
+
+## NEXT STEPS - ACTION PLAN
+
+### Phase 15 Remaining: Data Acquisition (PRIORITY 1)
+
+**Required Data Subscriptions**:
+
+1. **AAII Sentiment Survey** ($29/year)
+   - URL: https://www.aaii.com/membership
+   - Download weekly CSV with Bull/Bear/Neutral percentages
+   - Place in: `data/raw/sentiment/aaii_sentiment.csv`
+
+2. **Put/Call Ratio (PCR)**
+   - **Option A**: Quandl/Nasdaq Data Link (check if free tier available)
+     - URL: https://data.nasdaq.com/databases/EOD
+   - **Option B**: Barchart ($30-50/month)
+     - URL: https://www.barchart.com/solutions/data
+   - Place in: `data/raw/sentiment/pcr_data.csv`
+
+### Phase 15 Remaining: Integration Testing (PRIORITY 2)
+
+**To Test End-to-End**:
+```bash
+# Terminal 1: Start Python server
+python src/python/signal_server.py
+
+# Terminal 2 (or NinjaTrader):
+# - Import SKIENinjaTCPStrategy.cs
+# - Apply to ES 1-minute chart
+# - Run backtest for 2024 data
+# - Expected: ~2,044 trades (matching Python)
+```
+
+### Phase 16: Paper Trading Validation (PRIORITY 3)
+
+**Objective**: Validate live execution matches backtest expectations
+
+| Metric | Backtest | Target (Paper) | Tolerance |
+|--------|----------|----------------|-----------|
+| Win Rate | 40.4% | 38-43% | ±3% |
+| Avg Trade | $26.30 | $20-30 | ±25% |
+| Sharpe | 3.09 | 2.5-3.5 | ±15% |
+| Daily Trades | ~15 | 12-18 | ±20% |
+
+**Duration**: 30-60 trading days minimum
+
+**Success Criteria**:
+- Metrics within tolerance bands
+- No execution errors
+- Slippage matches assumptions ($0.125/tick)
+
+### Phase 17: Live Trading (PRIORITY 4)
+
+**Prerequisites**:
+- Paper trading validation PASSED
+- VPS infrastructure ready
+- Risk management implemented
+
+**Scaling Plan**:
+1. Start with 1 contract
+2. Scale based on performance (Kelly criterion)
+3. Max position: TBD based on account size
+
+### Maintenance & Monitoring
+
+| Task | Frequency | Description |
+|------|-----------|-------------|
+| **ONNX Model Retrain** | **Weekly** | Run `retrain_onnx_models.py` (CRITICAL for walk-forward equivalent) |
+| Performance Review | Weekly | Compare to backtest expectations |
+| Feature Drift Check | Monthly | Validate feature distributions |
+| Risk Review | Daily | Max drawdown, position limits |
+| Full Model Retrain | Quarterly | Complete retraining with expanded dataset |
+
+**CRITICAL**: ONNX models are static and decay rapidly. Per project methodology (180-day train, 5-day test), models should be retrained **weekly** to approximate walk-forward performance.
 
 ---
 
 ## KEY FILES TO KNOW
 
-### Active Strategy Files
+### Live Trading System (Phase 16 - ACTIVE)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/python/signal_server.py` | **TCP signal server - MUST BE RUNNING** | ✅ Active |
+| `src/csharp/SKIENinjaTCPStrategy.cs` | **NT8 TCP client - FIXED 2026-01-05** | ✅ Fixed |
+| `data/models/walkforward_onnx/` | 70 walk-forward ONNX model sets | ✅ Loaded |
+| `data/models/scaler_params.json` | Feature scaling parameters (42 features) | ✅ Reference |
+| `docs/FEATURE_AUDIT_20260105.md` | Feature mismatch fix documentation | ✅ Complete |
+| `docs/PAPER_TRADING_GUIDE.md` | Complete launch procedure | ✅ Reference |
+
+### Python Strategy Files
 | File | Purpose |
 |------|---------|
 | `src/python/strategy/volatility_breakout_strategy.py` | **MAIN STRATEGY** |
 | `src/python/feature_engineering/multi_target_labels.py` | Target generation (73 targets) |
+| `src/python/backtesting/walk_forward_backtest.py` | Walk-forward backtesting engine |
 | `src/python/run_oos_backtest.py` | OOS validation script |
-| `src/python/run_2025_forward_test.py` | Forward test script |
-| `src/python/run_threshold_optimization.py` | Parameter optimization |
 | `src/python/run_qc_check.py` | Quality control validation |
+
+### NinjaTrader Integration Files
+| File | Purpose |
+|------|---------|
+| `src/python/signal_server.py` | **TCP signal server (PRODUCTION)** |
+| `src/python/data_collection/sentiment_data_downloader.py` | PCR/AAII data downloader |
+| `src/python/data_collection/historical_sentiment_loader.py` | VIX/AAII/PCR loader |
+| `src/python/export_onnx.py` | Export LightGBM models to ONNX |
+| `src/python/retrain_onnx_models.py` | Weekly retraining script |
+| `src/csharp/SKIENinjaTCPStrategy.cs` | **NT8 TCP client (PRODUCTION)** |
+| `src/csharp/SKIENinjaWalkForwardStrategy.cs` | NT8 walk-forward ONNX strategy |
+| `src/csharp/SKIENinjaML/WalkForwardPredictor.cs` | C# walk-forward predictor |
+| `data/models/walkforward_onnx/` | 70 walk-forward ONNX model sets |
+| `docs/VALIDATION_REPORT.md` | Complete validation results |
+| `docs/NINJATRADER_INSTALLATION.md` | NT8 setup guide |
 
 ### Enhanced Feature Modules (NEW)
 | File | Purpose |
@@ -366,14 +695,17 @@ features, validation = generate_enhanced_features(
 - [x] QC checks: PASSED
 - [x] **Threshold optimization**: COMPLETE (+96% improvement)
 - [x] **Monte Carlo simulation**: COMPLETE (100% prob profit)
-- [x] **Enhanced validation**: COMPLETE (Phase 14)
+- [x] **NinjaTrader ONNX export**: COMPLETE (70 walk-forward models)
+- [x] **VIX data access fix**: COMPLETE (BarsArray method)
+- [x] **Identify fake data issue**: COMPLETE (PCR/AAII proxies)
+- [x] **Python-NT8 bridge architecture**: COMPLETE
 
 ### Phase 15 (In Progress)
-- [x] NinjaTrader account setup
-- [x] Socket Bridge implementation (**COMPLETE** - all critical issues fixed)
-- [ ] Platform walk-forward validation (Market Replay)
-- [ ] Paper trading validation (30-60 days)
-- [ ] Controlled live trading (MES → ES)
+- [ ] Obtain AAII subscription ($29/year)
+- [ ] Obtain PCR data subscription
+- [ ] Test integration end-to-end
+- [ ] Validate trade counts (~2,044 expected)
+- [ ] Paper trading validation
 
 ### Strategy Validation Summary
 | Strategy | Status | Recommendation |

@@ -1,7 +1,7 @@
 # SKIE_Ninja NinjaTrader 8 Installation Guide
 
 **Last Updated**: 2025-12-06
-**Version**: 1.2 - Added VIX sentiment integration requirements
+**Version**: 1.3 - Added AddDataSeries best practices and VIX data troubleshooting
 
 ---
 
@@ -30,9 +30,118 @@ The Python backtests use an **Ensemble Strategy** that requires BOTH:
 
 | Symbol | Provider | Notes |
 |--------|----------|-------|
+| $VIX | Most data feeds | Common default symbol |
 | ^VIX | Kinetick (free) | Delayed 15 min |
 | $VIX.X | CQG/Continuum | Real-time |
 | VIX | Interactive Brokers | Real-time |
+
+---
+
+## NinjaTrader AddDataSeries Best Practices
+
+When using secondary data series (like VIX) in NinjaTrader strategies, there are important limitations and best practices to follow.
+
+### Key Rules for AddDataSeries()
+
+1. **Call in State.Configure Only**
+   ```csharp
+   protected override void OnStateChange()
+   {
+       if (State == State.Configure)
+       {
+           AddDataSeries("$VIX", Data.BarsPeriodType.Day, 1);  // VIX daily
+       }
+   }
+   ```
+
+2. **Arguments Must Be Hardcoded**
+   - Per NinjaTrader documentation: "Arguments supplied to AddDataSeries() should be hardcoded and NOT dependent on run-time variables."
+   - Objects like `Instrument`, `BarsPeriod`, `TradingHours` are NOT available until `State.DataLoaded`
+   - You CANNOT dynamically construct the instrument name from variables
+
+3. **Understanding BarsInProgress**
+   - Primary series = `BarsInProgress 0`
+   - First AddDataSeries = `BarsInProgress 1`
+   - OnBarUpdate fires for EVERY series update
+   - Always filter: `if (BarsInProgress != 0) return;`
+
+4. **Accessing Secondary Series Data**
+   - Use plural forms: `Closes[1][0]` for secondary series close
+   - `Close[0]` is shorthand for `Closes[BarsInProgress][0]`
+   - Example: `double vixClose = Closes[1][0];`
+
+5. **Data Must Exist for Backtesting**
+   - **CRITICAL**: Historical data for the secondary instrument MUST exist in NinjaTrader for backtesting
+   - If data doesn't exist, AddDataSeries silently fails
+   - Strategy Analyzer has known limitations with secondary series
+
+### VIX Data Availability Issue
+
+**Problem**: In Strategy Analyzer backtests, VIX data may not be available even if AddDataSeries() is called correctly.
+
+**Symptoms**:
+- Sentiment filter disabled (warning in output tab)
+- Trade count matches non-sentiment results (~4,357 vs expected ~2,044)
+- `vixCloseHistory.Count` shows 0 or null
+
+**Root Cause**: VIX historical data must be downloaded/available in NinjaTrader's database for the backtest period.
+
+**Solutions**:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Download VIX history | Full feature parity | Requires data subscription |
+| Embed VIX in model files | No external data needed | Larger model files, less flexible |
+| CSV file loader | Works with any data | Additional complexity |
+| Disable sentiment filter | Simple | Reduced accuracy, more trades |
+
+### Downloading VIX Data
+
+1. Open **Control Center** → **Tools** → **Historical Data**
+2. Search for your VIX symbol (`$VIX`, `^VIX`, or `VIX`)
+3. Select appropriate data series (Daily recommended)
+4. Download historical data for your backtest period (2024+)
+5. Verify data loaded: Open a chart with VIX to confirm
+
+### RECOMMENDED: Add VIX to Chart as Secondary Data Series
+
+**Important**: A strategy can only access data series that are explicitly added via `AddDataSeries()` in its code. However, when you add VIX as a secondary data series **to the same chart** via the UI, NinjaTrader loads that historical data and makes it available to the strategy.
+
+**Steps to add VIX to your ES chart:**
+
+1. Open your ES futures chart (5-minute bars)
+2. Click the **Data Series** button on the Chart Toolbar (or right-click chart → "Data Series...")
+3. In the Data Series window, click **Add** (lower left corner)
+4. Configure the secondary series:
+   - **Instrument**: `$VIX` (or `^VIX` for Kinetick)
+   - **Type**: `Day`
+   - **Value**: `1`
+5. Click **OK** - VIX will appear as a secondary panel below ES
+6. (Optional) Hide the VIX panel by dragging the panel divider, or minimize it
+7. Run your strategy on this combined chart
+
+**Why this works**: When VIX is added to the chart via UI, NinjaTrader loads its historical data. The strategy's `AddDataSeries("$VIX", BarsPeriodType.Day, 1)` call then accesses this pre-loaded data via `BarsArray[1]`, `Closes[1]`, etc.
+
+**Note**: You cannot reference data from a **separate** chart window - the secondary instrument must be on the **same** chart as your strategy.
+
+References:
+- [NinjaTrader: Working with Multiple Data Series](https://ninjatrader.com/support/helpguides/nt8/working_with_multiple_data_series.htm)
+- [NinjaTrader Forum: Set multiple instruments via chart UI](https://forum.ninjatrader.com/forum/ninjatrader-8/strategy-development/1070358-set-multiple-instruments-in-strategy-via-chart-ui)
+
+### Alternative: Pre-computed VIX Features
+
+If VIX data cannot be obtained, an alternative is to:
+1. Pre-compute VIX sentiment features during Python model training
+2. Export these features embedded in the model or as separate JSON files
+3. Load from files instead of real-time calculation
+
+This approach trades real-time flexibility for guaranteed data availability.
+
+### References
+
+- [NinjaTrader AddDataSeries() Documentation](https://ninjatrader.com/support/helpguides/nt8/adddataseries.htm)
+- [Multi-Timeframe & Instruments Guide](https://ninjatrader.com/support/helpguides/nt8/multi-time_frame__instruments.htm)
+- [NinjaTrader Forum: AddDataSeries Best Practices](https://forum.ninjatrader.com/forum/ninjatrader-8/platform-technical-support-aa/1305538-what-is-best-practice-for-using-adddataseries-with-a-strategy)
 
 ---
 
@@ -186,6 +295,17 @@ Run in Sim101 account for 30-60 days before live trading.
 - The strategy calculates ~47 features
 - scaler_params.json must have matching count
 - Re-run export_onnx.py if mismatch occurs
+
+### VIX data NOT available (Sentiment filter disabled)
+- **Symptom**: Output shows "WARNING: VIX data NOT available - sentiment filter DISABLED"
+- **Result**: Trade count ~4,357 instead of expected ~2,044
+- **Cause**: VIX historical data not loaded in NinjaTrader
+- **Solution**: See [AddDataSeries Best Practices](#ninjatrader-adddataseries-best-practices) section
+- **Steps**:
+  1. Open Historical Data Manager (Tools → Historical Data)
+  2. Search for VIX symbol (`$VIX`, `^VIX`, or `VIX`)
+  3. Download historical data covering your backtest period
+  4. Re-run backtest
 
 ## Model Updates (CRITICAL)
 

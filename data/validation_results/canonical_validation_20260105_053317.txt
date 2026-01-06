@@ -1,0 +1,32 @@
+CANONICAL VALIDATION REPORT
+Generated: 2026-01-05T05:33:17.892921
+============================================================
+
+============================================================
+CANONICAL VALIDATION RESULTS
+============================================================
+
+Sharpe Ratio (raw):      2.9057
+Deflated Sharpe Ratio:   3.4208
+DSR p-value:             0.0003
+
+PBO (Prob Overfit):      nan
+  Interpretation:        ACCEPTABLE
+
+Sharpe 95% CI:           [2.0016, 3.7954]
+
+ADF Statistic:           -20.4512
+ADF p-value:             0.0000
+Stationary:              True
+
+Paths Tested:            0
+Trials Corrected For:    81
+
+OVERALL:                 PASS
+============================================================
+
+RECOMMENDATIONS:
+
+1. Embargo is under-specified: Current = 42 bars, Required = 210 bars. This creates potential data leakage. MUST FIX before re-validation.
+
+2. Sharpe > 2.5 is unusual for non-HFT strategies. Verify no look-ahead bias, verify costs are realistic, verify data quality.

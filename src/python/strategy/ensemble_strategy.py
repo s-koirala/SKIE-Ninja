@@ -83,7 +83,10 @@ class EnsembleConfig:
     # Walk-forward settings
     train_days: int = 60
     test_days: int = 5
-    embargo_bars: int = 20
+    # Embargo = max(feature_lookback, label_horizon) + safety_margin
+    # Per Lopez de Prado (2018), Ch. 7: max(200, 30) + 10 = 210
+    # PREVIOUSLY: 20 (INCORRECT - caused data leakage)
+    embargo_bars: int = 210
 
 
 class EnsembleStrategy:
