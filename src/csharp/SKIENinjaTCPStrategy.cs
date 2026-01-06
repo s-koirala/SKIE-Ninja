@@ -417,8 +417,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (trueRangeHistory.Count > 55)
                     trueRangeHistory.RemoveAt(0);
 
-                double logReturn = Close[1] > 0 ? Math.Log(Close[0] / Close[1]) : 0;
-                logReturnHistory.Add(logReturn);
+                // FIX 2026-01-06: Use percent change, not log return
+                // Python: df['close'].pct_change() = (Close[t] - Close[t-1]) / Close[t-1]
+                double pctReturn = Close[1] > 0 ? (Close[0] - Close[1]) / Close[1] : 0;
+                logReturnHistory.Add(pctReturn);  // Variable name kept for compatibility
                 if (logReturnHistory.Count > 55)
                     logReturnHistory.RemoveAt(0);
 
@@ -482,16 +484,18 @@ namespace NinjaTrader.NinjaScript.Strategies
                 featureBuffer[idx++] = Close[0] > 0 ? (high50 - low50) / Close[0] : 0;     // range_pct_50
 
                 // 9. Momentum period 5 (2 features): momentum_5, ma_dist_5
-                featureBuffer[idx++] = Close[0] - Close[5];  // momentum_5
-                featureBuffer[idx++] = Close[0] > 0 ? (Close[0] - sma5[0]) / Close[0] : 0;  // ma_dist_5
+                // FIX 2026-01-06: momentum must be pct_change, not price difference
+                featureBuffer[idx++] = Close[5] > 0 ? (Close[0] - Close[5]) / Close[5] : 0;  // momentum_5 (pct_change)
+                // FIX 2026-01-06: ma_dist normalized by MA, not by Close
+                featureBuffer[idx++] = sma5[0] > 0 ? (Close[0] - sma5[0]) / sma5[0] : 0;  // ma_dist_5
 
                 // 10. Momentum period 10 (2 features): momentum_10, ma_dist_10
-                featureBuffer[idx++] = Close[0] - Close[10];  // momentum_10
-                featureBuffer[idx++] = Close[0] > 0 ? (Close[0] - sma10[0]) / Close[0] : 0;  // ma_dist_10
+                featureBuffer[idx++] = Close[10] > 0 ? (Close[0] - Close[10]) / Close[10] : 0;  // momentum_10 (pct_change)
+                featureBuffer[idx++] = sma10[0] > 0 ? (Close[0] - sma10[0]) / sma10[0] : 0;  // ma_dist_10
 
                 // 11. Momentum period 20 (2 features): momentum_20, ma_dist_20
-                featureBuffer[idx++] = Close[0] - Close[20];  // momentum_20
-                featureBuffer[idx++] = Close[0] > 0 ? (Close[0] - sma20[0]) / Close[0] : 0;  // ma_dist_20
+                featureBuffer[idx++] = Close[20] > 0 ? (Close[0] - Close[20]) / Close[20] : 0;  // momentum_20 (pct_change)
+                featureBuffer[idx++] = sma20[0] > 0 ? (Close[0] - sma20[0]) / sma20[0] : 0;  // ma_dist_20
 
                 // 12. RSI features (2 features): rsi_7, rsi_14
                 featureBuffer[idx++] = GetRSI(7);   // rsi_7
@@ -546,8 +550,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private double GetRealizedVolatility(int period)
         {
-            // Realized volatility = std(log returns) * sqrt(252)
-            // Matches Python: df['close'].pct_change().rolling(period).std() * np.sqrt(252)
+            // FIX 2026-01-06: Realized volatility must match Python exactly
+            // Python: df['close'].pct_change().rolling(period).std()
+            // NO annualization - Python uses raw rolling std of percent changes
+            // Previous bug: was multiplying by sqrt(252) which Python doesn't do
             if (logReturnHistory.Count < period)
                 return 0;
 
@@ -560,9 +566,11 @@ namespace NinjaTrader.NinjaScript.Strategies
             double variance = 0;
             for (int i = start; i < logReturnHistory.Count; i++)
                 variance += Math.Pow(logReturnHistory[i] - mean, 2);
+            // Use sample std (N-1 denominator) to match pandas default
             variance /= (period - 1);
 
-            return Math.Sqrt(variance) * Math.Sqrt(252);
+            // FIX: Return raw std, NOT annualized
+            return Math.Sqrt(variance);
         }
 
         private double GetRSI(int period)

@@ -1,0 +1,14 @@
+{
+  "timestamp": "20260106_065451",
+  "onnx_vol_mean": 0.4767235292246792,
+  "onnx_vol_std": 0.24395919952866219,
+  "onnx_vol_max": 0.9885082840919495,
+  "python_vol_mean": 0.4770195912792715,
+  "python_vol_std": 0.2503558410683626,
+  "python_vol_max": 0.9843175885466678,
+  "correlation": 0.9596518856316046,
+  "mean_delta": 0.049999507282222695,
+  "target_base_rate": 0.4771046643913538,
+  "recommended_threshold": 0.8156124413013458,
+  "samples_analyzed": 14064
+}
